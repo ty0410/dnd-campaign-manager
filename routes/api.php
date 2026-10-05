@@ -32,3 +32,5 @@ Route::post('/campaigns', [CampaignController::class, 'store'])
     ->middleware('auth:sanctum');
     Route::get('/campaigns/{campaignId}/characters', [CharacterController::class, 'index'])
     ->middleware('auth:sanctum');
+    Route::post('/campaigns/{campaignId}/characters', [CharacterController::class, 'store'])
+    ->middleware('auth:sanctum');
