@@ -51,4 +51,29 @@ class CampaignController extends Controller
 
         return response()->json($campaign);
     }
+
+    public function update(Request $request, $id)
+{
+    $campaign = $request->user()
+        ->masteredCampaigns()
+        ->find($id);
+
+    if (!$campaign) {
+        return response()->json([
+            'message' => 'Campaña no encontrada o no tienes permisos para modificarla.',
+        ], 404);
+    }
+
+    $validated = $request->validate([
+        'name' => ['required', 'string', 'max:255'],
+        'description' => ['nullable', 'string'],
+    ]);
+
+    $campaign->update($validated);
+
+    return response()->json([
+        'message' => 'Campaña actualizada correctamente.',
+        'campaign' => $campaign,
+    ]);
+}
 }

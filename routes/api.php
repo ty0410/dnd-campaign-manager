@@ -23,3 +23,6 @@ Route::post('/campaigns', [CampaignController::class, 'store'])
 
     Route::get('/campaigns/{id}', [CampaignController::class, 'show'])
     ->middleware('auth:sanctum');
+
+    Route::put('/campaigns/{id}', [CampaignController::class, 'update'])
+    ->middleware('auth:sanctum');
