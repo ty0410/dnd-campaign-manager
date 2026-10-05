@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CampaignController;
+use App\Http\Controllers\Api\CharacterController;
 
 Route::get('/me', function (Request $request) {
     return $request->user();
@@ -28,4 +29,6 @@ Route::post('/campaigns', [CampaignController::class, 'store'])
     ->middleware('auth:sanctum');
 
     Route::delete('/campaigns/{id}', [CampaignController::class, 'destroy'])
+    ->middleware('auth:sanctum');
+    Route::get('/campaigns/{campaignId}/characters', [CharacterController::class, 'index'])
     ->middleware('auth:sanctum');
