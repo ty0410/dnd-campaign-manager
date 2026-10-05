@@ -26,3 +26,6 @@ Route::post('/campaigns', [CampaignController::class, 'store'])
 
     Route::put('/campaigns/{id}', [CampaignController::class, 'update'])
     ->middleware('auth:sanctum');
+
+    Route::delete('/campaigns/{id}', [CampaignController::class, 'destroy'])
+    ->middleware('auth:sanctum');

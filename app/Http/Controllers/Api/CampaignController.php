@@ -76,4 +76,23 @@ class CampaignController extends Controller
         'campaign' => $campaign,
     ]);
 }
+
+public function destroy(Request $request, $id)
+{
+    $campaign = $request->user()
+        ->masteredCampaigns()
+        ->find($id);
+
+    if (!$campaign) {
+        return response()->json([
+            'message' => 'Campaña no encontrada o no tienes permisos para eliminarla.',
+        ], 404);
+    }
+
+    $campaign->delete();
+
+    return response()->json([
+        'message' => 'Campaña eliminada correctamente.',
+    ]);
+}
 }
