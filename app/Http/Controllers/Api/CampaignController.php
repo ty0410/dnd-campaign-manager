@@ -8,30 +8,47 @@ use Illuminate\Http\Request;
 class CampaignController extends Controller
 {
     public function index(Request $request)
-{
-    $campaigns = $request->user()
-        ->campaigns()
-        ->with('master')
-        ->get();
+    {
+        $campaigns = $request->user()
+            ->campaigns()
+            ->with('master')
+            ->get();
 
-    return response()->json($campaigns);
-}
-public function store(Request $request)
-{
-    $validated = $request->validate([
-        'name' => ['required', 'string', 'max:255'],
-        'description' => ['nullable', 'string'],
-    ]);
+        return response()->json($campaigns);
+    }
 
-    $user = $request->user();
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
+        ]);
 
-    $campaign = $user->masteredCampaigns()->create($validated);
+        $user = $request->user();
 
-    $campaign->users()->attach($user->id);
+        $campaign = $user->masteredCampaigns()->create($validated);
 
-    return response()->json([
-        'message' => 'Campaña creada correctamente.',
-        'campaign' => $campaign,
-    ], 201);
-}
+        $campaign->users()->attach($user->id);
+
+        return response()->json([
+            'message' => 'Campaña creada correctamente.',
+            'campaign' => $campaign,
+        ], 201);
+    }
+
+    public function show(Request $request, $id)
+    {
+        $campaign = $request->user()
+            ->campaigns()
+            ->with('master')
+            ->find($id);
+
+        if (!$campaign) {
+            return response()->json([
+                'message' => 'Campaña no encontrada.',
+            ], 404);
+        }
+
+        return response()->json($campaign);
+    }
 }

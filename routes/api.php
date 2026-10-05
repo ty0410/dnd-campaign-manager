@@ -20,3 +20,6 @@ Route::get('/campaigns', [CampaignController::class, 'index'])
 
 Route::post('/campaigns', [CampaignController::class, 'store'])
     ->middleware('auth:sanctum');
+
+    Route::get('/campaigns/{id}', [CampaignController::class, 'show'])
+    ->middleware('auth:sanctum');
