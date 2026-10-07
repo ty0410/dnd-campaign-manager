@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\CombatantController;
 use App\Http\Controllers\Api\DndMonsterController;
 use App\Http\Controllers\Api\DndSpellController;
 use App\Http\Controllers\Api\DndClassController;
+use App\Http\Controllers\Api\DndEquipmentController;
 
 Route::get('/me', function (Request $request) {
     return $request->user();
@@ -162,3 +163,7 @@ Route::get('/dnd/spells/{index}', [DndSpellController::class, 'show']);
 // Rutas para la API de clases
 Route::get('/dnd/classes', [DndClassController::class, 'index']);
 Route::get('/dnd/classes/{index}', [DndClassController::class, 'show']);
+
+// Rutas para la API de equipo
+Route::get('/dnd/equipment', [DndEquipmentController::class, 'index']);
+Route::get('/dnd/equipment/{index}', [DndEquipmentController::class, 'show']);

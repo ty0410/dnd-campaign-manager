@@ -61,4 +61,22 @@ public function getClass(string $index): ?array
 
     return $response->json();
 }
+
+public function getEquipment(): array
+{
+    $response = Http::get($this->baseUrl . '/equipment');
+
+    return $response->json();
+}
+
+public function getEquipmentItem(string $index): ?array
+{
+    $response = Http::get($this->baseUrl . '/equipment/' . $index);
+
+    if ($response->notFound()) {
+        return null;
+    }
+
+    return $response->json();
+}
 }
