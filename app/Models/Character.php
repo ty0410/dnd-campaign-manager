@@ -8,14 +8,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Character extends Model
 {
-    protected $fillable = [
-        'campaign_id',
-        'user_id',
-        'name',
-        'race',
-        'level',
-        'description',
-    ];
+  protected $fillable = [
+    'campaign_id',
+    'user_id',
+    'name',
+    'race',
+    'level',
+    'proficiency_bonus',
+    'description',
+];
 
     /**
      * Campaña a la que pertenece el personaje.

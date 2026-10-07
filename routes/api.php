@@ -38,6 +38,7 @@ Route::post('/campaigns', [CampaignController::class, 'store'])
     Route::delete('/campaigns/{id}', [CampaignController::class, 'destroy'])
     ->middleware('auth:sanctum');
 
+   
 // Rutas para personajes
     Route::get('/campaigns/{campaignId}/characters', [CharacterController::class, 'index'])
     ->middleware('auth:sanctum');
