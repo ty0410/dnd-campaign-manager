@@ -7,3 +7,6 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function () {
     return view('welcome');
 });
+
+Route::view('/vue-test', 'vue-test');
+Route::view('/', 'vue-test');
