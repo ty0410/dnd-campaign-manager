@@ -59,4 +59,99 @@ class CharacterController extends Controller
         'character' => $character,
     ], 201);
 }
+public function show(Request $request, $id)
+{
+    $character = \App\Models\Character::with([
+        'user',
+        'characterClasses',
+        'campaign',
+    ])->find($id);
+
+    if (!$character) {
+        return response()->json([
+            'message' => 'Personaje no encontrado.',
+        ], 404);
+    }
+
+    $hasAccess = $request->user()
+        ->campaigns()
+        ->where('campaigns.id', $character->campaign_id)
+        ->exists();
+
+    if (!$hasAccess) {
+        return response()->json([
+            'message' => 'No tienes acceso a este personaje.',
+        ], 404);
+    }
+
+    return response()->json($character);
+}
+public function update(Request $request, $id)
+{
+    $character = \App\Models\Character::find($id);
+
+    if (!$character) {
+        return response()->json([
+            'message' => 'Personaje no encontrado.',
+        ], 404);
+    }
+
+    $hasAccess = $request->user()
+        ->campaigns()
+        ->where('campaigns.id', $character->campaign_id)
+        ->exists();
+
+    if (!$hasAccess) {
+        return response()->json([
+            'message' => 'No tienes acceso a este personaje.',
+        ], 404);
+    }
+
+    $validated = $request->validate([
+        'name' => ['required', 'string', 'max:255'],
+        'race' => ['nullable', 'string', 'max:100'],
+        'level' => ['nullable', 'integer', 'min:1', 'max:20'],
+        'description' => ['nullable', 'string'],
+    ]);
+
+    $character->update([
+        'name' => $validated['name'],
+        'race' => $validated['race'] ?? null,
+        'level' => $validated['level'] ?? 1,
+        'description' => $validated['description'] ?? null,
+    ]);
+
+    return response()->json([
+        'message' => 'Personaje actualizado correctamente.',
+        'character' => $character,
+    ]);
+}
+
+public function destroy(Request $request, $id)
+{
+    $character = \App\Models\Character::find($id);
+
+    if (!$character) {
+        return response()->json([
+            'message' => 'Personaje no encontrado.',
+        ], 404);
+    }
+
+    $hasAccess = $request->user()
+        ->campaigns()
+        ->where('campaigns.id', $character->campaign_id)
+        ->exists();
+
+    if (!$hasAccess) {
+        return response()->json([
+            'message' => 'No tienes acceso a este personaje.',
+        ], 404);
+    }
+
+    $character->delete();
+
+    return response()->json([
+        'message' => 'Personaje eliminado correctamente.',
+    ]);
+}
 }

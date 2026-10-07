@@ -34,3 +34,11 @@ Route::post('/campaigns', [CampaignController::class, 'store'])
     ->middleware('auth:sanctum');
     Route::post('/campaigns/{campaignId}/characters', [CharacterController::class, 'store'])
     ->middleware('auth:sanctum');
+    Route::get('/characters/{id}', [CharacterController::class, 'show'])
+    ->middleware('auth:sanctum');
+    Route::put('/characters/{id}', [CharacterController::class, 'update'])
+    ->middleware('auth:sanctum');
+    Route::delete('/characters/{id}', [CharacterController::class, 'destroy'])
+    ->middleware('auth:sanctum');
+
+    
