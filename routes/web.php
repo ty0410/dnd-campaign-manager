@@ -10,3 +10,6 @@ Route::get('/', function () {
 
 Route::view('/vue-test', 'vue-test');
 Route::view('/', 'vue-test');
+Route::view('/login', 'vue-test');
+Route::view('/register', 'vue-test');
+Route::view('/campaigns', 'vue-test');

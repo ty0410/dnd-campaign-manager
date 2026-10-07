@@ -1,9 +1,17 @@
 <template>
     <main>
-        <h1>D&D Campaign Manager</h1>
+        <h1>Gestor de Tasha para todo</h1>
 
         <p>
-            Gestor de Tasha para todo.
+            Gestor de campañas de Dungeons & Dragons 5ª edición.
         </p>
+
+        <RouterLink to="/login">
+            Iniciar sesión
+        </RouterLink>
     </main>
 </template>
+
+<script setup>
+import { RouterLink } from 'vue-router';
+</script>
