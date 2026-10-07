@@ -11,6 +11,9 @@ use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\GameSessionController;
 use App\Http\Controllers\Api\EncounterController;
 use App\Http\Controllers\Api\CombatantController;
+use App\Http\Controllers\Api\DndMonsterController;
+use App\Http\Controllers\Api\DndSpellController;
+use App\Http\Controllers\Api\DndClassController;
 
 Route::get('/me', function (Request $request) {
     return $request->user();
@@ -29,30 +32,30 @@ Route::get('/campaigns', [CampaignController::class, 'index'])
 Route::post('/campaigns', [CampaignController::class, 'store'])
     ->middleware('auth:sanctum');
 
-    Route::get('/campaigns/{id}', [CampaignController::class, 'show'])
+Route::get('/campaigns/{id}', [CampaignController::class, 'show'])
     ->middleware('auth:sanctum');
 
-    Route::put('/campaigns/{id}', [CampaignController::class, 'update'])
+Route::put('/campaigns/{id}', [CampaignController::class, 'update'])
     ->middleware('auth:sanctum');
 
-    Route::delete('/campaigns/{id}', [CampaignController::class, 'destroy'])
+Route::delete('/campaigns/{id}', [CampaignController::class, 'destroy'])
     ->middleware('auth:sanctum');
 
-   
+
 // Rutas para personajes
-    Route::get('/campaigns/{campaignId}/characters', [CharacterController::class, 'index'])
+Route::get('/campaigns/{campaignId}/characters', [CharacterController::class, 'index'])
     ->middleware('auth:sanctum');
-    Route::post('/campaigns/{campaignId}/characters', [CharacterController::class, 'store'])
+Route::post('/campaigns/{campaignId}/characters', [CharacterController::class, 'store'])
     ->middleware('auth:sanctum');
-    Route::get('/characters/{id}', [CharacterController::class, 'show'])
+Route::get('/characters/{id}', [CharacterController::class, 'show'])
     ->middleware('auth:sanctum');
-    Route::put('/characters/{id}', [CharacterController::class, 'update'])
+Route::put('/characters/{id}', [CharacterController::class, 'update'])
     ->middleware('auth:sanctum');
-    Route::delete('/characters/{id}', [CharacterController::class, 'destroy'])
+Route::delete('/characters/{id}', [CharacterController::class, 'destroy'])
     ->middleware('auth:sanctum');
 
-    // Rutas para clases de personajes
-    Route::get('/characters/{characterId}/classes', [CharacterClassController::class, 'index'])
+// Rutas para clases de personajes
+Route::get('/characters/{characterId}/classes', [CharacterClassController::class, 'index'])
     ->middleware('auth:sanctum');
 Route::post('/characters/{characterId}/classes', [CharacterClassController::class, 'store'])
     ->middleware('auth:sanctum');
@@ -66,8 +69,8 @@ Route::put('/characters/{characterId}/classes/{classId}', [CharacterClassControl
 Route::delete('/characters/{characterId}/classes/{classId}', [CharacterClassController::class, 'destroy'])
     ->middleware('auth:sanctum');
 
-    // Rutas para NPCs
-    
+// Rutas para NPCs
+
 Route::get('/campaigns/{campaignId}/npcs', [NpcController::class, 'index'])
     ->middleware('auth:sanctum');
 
@@ -84,7 +87,7 @@ Route::delete('/npcs/{id}', [NpcController::class, 'destroy'])
     ->middleware('auth:sanctum');
 
 
-    // Rutas para lugares
+// Rutas para lugares
 Route::get('/campaigns/{campaignId}/locations', [LocationController::class, 'index'])
     ->middleware('auth:sanctum');
 
@@ -100,8 +103,8 @@ Route::put('/locations/{id}', [LocationController::class, 'update'])
 Route::delete('/locations/{id}', [LocationController::class, 'destroy'])
     ->middleware('auth:sanctum');
 
-    // Rutas para sesiones de juego
-    Route::get('/campaigns/{campaignId}/sessions', [GameSessionController::class, 'index'])
+// Rutas para sesiones de juego
+Route::get('/campaigns/{campaignId}/sessions', [GameSessionController::class, 'index'])
     ->middleware('auth:sanctum');
 
 Route::post('/campaigns/{campaignId}/sessions', [GameSessionController::class, 'store'])
@@ -116,8 +119,8 @@ Route::put('/sessions/{id}', [GameSessionController::class, 'update'])
 Route::delete('/sessions/{id}', [GameSessionController::class, 'destroy'])
     ->middleware('auth:sanctum');
 
-    // Rutas para encuentros
-    Route::get('/campaigns/{campaignId}/encounters', [EncounterController::class, 'index'])
+// Rutas para encuentros
+Route::get('/campaigns/{campaignId}/encounters', [EncounterController::class, 'index'])
     ->middleware('auth:sanctum');
 
 Route::post('/campaigns/{campaignId}/encounters', [EncounterController::class, 'store'])
@@ -132,8 +135,8 @@ Route::put('/encounters/{id}', [EncounterController::class, 'update'])
 Route::delete('/encounters/{id}', [EncounterController::class, 'destroy'])
     ->middleware('auth:sanctum');
 
-    // Rutas para combatientes
-    Route::get('/encounters/{encounterId}/combatants', [CombatantController::class, 'index'])
+// Rutas para combatientes
+Route::get('/encounters/{encounterId}/combatants', [CombatantController::class, 'index'])
     ->middleware('auth:sanctum');
 
 Route::post('/encounters/{encounterId}/combatants', [CombatantController::class, 'store'])
@@ -147,3 +150,15 @@ Route::put('/combatants/{id}', [CombatantController::class, 'update'])
 
 Route::delete('/combatants/{id}', [CombatantController::class, 'destroy'])
     ->middleware('auth:sanctum');
+
+// Rutas para la API de monstruos
+Route::get('/dnd/monsters', [DndMonsterController::class, 'index']);
+Route::get('/dnd/monsters/{index}', [DndMonsterController::class, 'show']);
+
+// Rutas para la API de conjuros
+Route::get('/dnd/spells', [DndSpellController::class, 'index']);
+Route::get('/dnd/spells/{index}', [DndSpellController::class, 'show']);
+
+// Rutas para la API de clases
+Route::get('/dnd/classes', [DndClassController::class, 'index']);
+Route::get('/dnd/classes/{index}', [DndClassController::class, 'show']);
