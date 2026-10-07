@@ -8,6 +8,9 @@ use App\Http\Controllers\Api\CharacterController;
 use App\Http\Controllers\Api\CharacterClassController;
 use App\Http\Controllers\Api\NpcController;
 use App\Http\Controllers\Api\LocationController;
+use App\Http\Controllers\Api\GameSessionController;
+use App\Http\Controllers\Api\EncounterController;
+use App\Http\Controllers\Api\CombatantController;
 
 Route::get('/me', function (Request $request) {
     return $request->user();
@@ -94,4 +97,52 @@ Route::put('/locations/{id}', [LocationController::class, 'update'])
     ->middleware('auth:sanctum');
 
 Route::delete('/locations/{id}', [LocationController::class, 'destroy'])
+    ->middleware('auth:sanctum');
+
+    // Rutas para sesiones de juego
+    Route::get('/campaigns/{campaignId}/sessions', [GameSessionController::class, 'index'])
+    ->middleware('auth:sanctum');
+
+Route::post('/campaigns/{campaignId}/sessions', [GameSessionController::class, 'store'])
+    ->middleware('auth:sanctum');
+
+Route::get('/sessions/{id}', [GameSessionController::class, 'show'])
+    ->middleware('auth:sanctum');
+
+Route::put('/sessions/{id}', [GameSessionController::class, 'update'])
+    ->middleware('auth:sanctum');
+
+Route::delete('/sessions/{id}', [GameSessionController::class, 'destroy'])
+    ->middleware('auth:sanctum');
+
+    // Rutas para encuentros
+    Route::get('/campaigns/{campaignId}/encounters', [EncounterController::class, 'index'])
+    ->middleware('auth:sanctum');
+
+Route::post('/campaigns/{campaignId}/encounters', [EncounterController::class, 'store'])
+    ->middleware('auth:sanctum');
+
+Route::get('/encounters/{id}', [EncounterController::class, 'show'])
+    ->middleware('auth:sanctum');
+
+Route::put('/encounters/{id}', [EncounterController::class, 'update'])
+    ->middleware('auth:sanctum');
+
+Route::delete('/encounters/{id}', [EncounterController::class, 'destroy'])
+    ->middleware('auth:sanctum');
+
+    // Rutas para combatientes
+    Route::get('/encounters/{encounterId}/combatants', [CombatantController::class, 'index'])
+    ->middleware('auth:sanctum');
+
+Route::post('/encounters/{encounterId}/combatants', [CombatantController::class, 'store'])
+    ->middleware('auth:sanctum');
+
+Route::get('/combatants/{id}', [CombatantController::class, 'show'])
+    ->middleware('auth:sanctum');
+
+Route::put('/combatants/{id}', [CombatantController::class, 'update'])
+    ->middleware('auth:sanctum');
+
+Route::delete('/combatants/{id}', [CombatantController::class, 'destroy'])
     ->middleware('auth:sanctum');
