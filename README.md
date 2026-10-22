@@ -1,58 +1,165 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Gestor de Tasha para todo
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Aplicación web para gestionar campañas de **Dungeons & Dragons 5.ª edición**, con herramientas para organizar personajes, consultar información del juego y administrar los elementos de una campaña.
 
-## About Laravel
+El proyecto se desarrolla como trabajo final del ciclo de Desarrollo de Aplicaciones Web (DAW).
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Tecnologías utilizadas
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+### Backend
+- **PHP y Laravel 13** para la lógica de servidor.
+- **API REST** para la comunicación entre el cliente y el servidor.
+- **Laravel Sanctum** para la autenticación mediante tokens.
+- **MySQL/MariaDB** como sistema de gestión de bases de datos.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### Frontend
+- **Vue.js** para construir la interfaz de usuario.
+- **JavaScript** para la lógica del cliente.
+- **CSS** para el diseño y la adaptación visual de la aplicación.
+- **Vite** para la compilación de los recursos del frontend.
 
-## Learning Laravel
+### Integración externa
+- **D&D 5e API:** https://www.dnd5eapi.co/
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## Funcionalidades implementadas
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### Autenticación y usuarios
+- Controladores de registro e inicio de sesión.
+- Autenticación mediante Laravel Sanctum.
+- Comunicación entre el frontend y la API del servidor.
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+### Gestión de campañas
+- Creación y administración de campañas.
+- Operaciones CRUD para gestionar campañas.
+- Gestión de la participación de usuarios en las campañas.
 
-## Agentic Development
+### Gestión de personajes
+- Creación y consulta de personajes.
+- Fichas de personaje con características y atributos.
+- Gestión de clases y personajes multiclase.
+- Cálculo y validación de características del personaje.
+- Gestión de niveles, competencias, conjuros, espacios de conjuro, inventario y monedas.
+- Posibilidad de asociar personajes a campañas.
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+### Recursos de las campañas
+La API incluye controladores y modelos para administrar diferentes elementos del juego:
 
-```bash
-composer require laravel/boost --dev
+- Personajes no jugadores (NPC).
+- Localizaciones.
+- Sesiones de juego.
+- Encuentros y combatientes.
+- Notas de campaña.
 
-php artisan boost:install
+### Integración con D&D 5e API
+- Servicio para consultar información de la API externa.
+- Controladores para acceder a catálogos de razas, clases, conjuros, equipo y monstruos.
+- Integración de estos recursos con la lógica del servidor.
+
+### Interfaz web
+La aplicación cuenta con vistas de Vue para la navegación principal, campañas, detalle de campaña, personajes, creación de personajes, autenticación y consulta de recursos de D&D.
+
+## Estructura del proyecto
+
+```text
+dnd-campaign-manager/
+├── app/
+│   ├── Http/Controllers/Api/
+│   ├── Models/
+│   └── Services/
+├── bootstrap/
+├── config/
+├── database/
+│   ├── factories/
+│   ├── migrations/
+│   └── seeders/
+├── public/
+├── resources/
+│   ├── css/
+│   ├── js/
+│   │   ├── router/
+│   │   ├── services/
+│   │   └── views/
+│   └── views/
+├── routes/
+│   ├── api.php
+│   ├── console.php
+│   └── web.php
+├── tests/
+├── composer.json
+├── package.json
+└── vite.config.js
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+## Requisitos previos
 
-## Contributing
+Para ejecutar el proyecto en un entorno de desarrollo se necesitan:
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+- PHP compatible con Laravel 13.
+- Composer.
+- Node.js y npm.
+- MySQL o MariaDB.
+- Un servidor web o el servidor de desarrollo de Laravel.
 
-## Code of Conduct
+## Instalación y ejecución
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+1. Clonar el repositorio y entrar en el directorio del proyecto.
 
-## Security Vulnerabilities
+   ```bash
+   git clone https://github.com/ty0410/dnd-campaign-manager.git
+   cd dnd-campaign-manager
+   ```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+2. Instalar las dependencias de PHP.
 
-## License
+   ```bash
+   composer install
+   ```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+3. Crear el archivo de configuración local.
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   En Windows también se puede copiar `.env.example` manualmente y nombrar la copia `.env`.
+
+4. Generar la clave de la aplicación.
+
+   ```bash
+   php artisan key:generate
+   ```
+
+5. Configurar en `.env` la conexión con la base de datos MySQL/MariaDB y crear la base de datos correspondiente.
+
+6. Ejecutar las migraciones.
+
+   ```bash
+   php artisan migrate
+   ```
+
+7. Instalar las dependencias del frontend y compilar los recursos.
+
+   ```bash
+   npm install
+   npm run build
+   ```
+
+8. Iniciar el servidor de desarrollo de Laravel.
+
+   ```bash
+   php artisan serve
+   ```
+
+La aplicación estará disponible normalmente en `http://127.0.0.1:8000`.
+
+> La configuración de la base de datos y del entorno debe adaptarse al equipo donde se ejecute el proyecto. La instalación y el funcionamiento completo deben verificarse en cada entorno.
+
+## Estado del proyecto
+
+El proyecto se encuentra en desarrollo. La estructura de Laravel, la API, los modelos, las migraciones y las vistas principales de Vue están desarrollados.
+
+Queda pendiente verificar y consolidar el funcionamiento integral de las funcionalidades, ampliar las pruebas y documentar los requisitos y casos de uso definitivos.
+
+## Autor
+
+Proyecto desarrollado como trabajo final del ciclo de Desarrollo de Aplicaciones Web (DAW).
