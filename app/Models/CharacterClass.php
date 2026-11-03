@@ -13,6 +13,8 @@ class CharacterClass extends Model
         'class',
         'level',
         'class_index',
+        'subclass_index',
+        'subclass_name',
         'is_primary',
         'hit_die',
     ];

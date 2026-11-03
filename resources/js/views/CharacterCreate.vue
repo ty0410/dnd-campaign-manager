@@ -26,7 +26,7 @@
                         :src="imagePreview"
                         alt="Vista previa del retrato del personaje"
                     />
-                    <span v-else aria-hidden="true">🧙</span>
+                    <span v-else aria-hidden="true">Sin retrato</span>
                 </div>
 
                 <input
@@ -115,8 +115,40 @@
                 </select>
             </div>
 
+            <section class="class-selection-section">
+                <h2>Clase y competencias</h2>
+                <p>Selecciona la clase inicial. Si empiezas a un nivel superior, todos esos niveles se asignarán inicialmente a esta clase.</p>
+
+                <div class="form-group">
+                    <label for="character-class">Clase principal</label>
+                    <select id="character-class" v-model="newCharacter.class_index" @change="onClassChange" required>
+                        <option value="">Selecciona una clase</option>
+                        <option v-for="item in classes" :key="item.index" :value="item.index">{{ item.name }}</option>
+                    </select>
+                </div>
+
+                <p v-if="loadingClassDetails">Cargando competencias de clase...</p>
+                <template v-if="selectedClassDetails">
+                    <p><strong>Dado de golpe:</strong> d{{ selectedClassDetails.hit_die }}</p>
+                    <div class="class-proficiencies-summary">
+                        <h3>Competencias automáticas</h3>
+                        <p><strong>Tiradas de salvación:</strong> {{ (selectedClassDetails.saving_throws || []).map(item => item.name).join(', ') || 'Ninguna' }}</p>
+                        <p><strong>Armaduras, armas y herramientas:</strong> {{ (selectedClassDetails.proficiencies || []).map(item => item.name).join(', ') || 'Ninguna' }}</p>
+                    </div>
+                    <div v-for="(choice, choiceIndex) in classChoiceGroups" :key="choiceIndex" class="form-group">
+                        <label>Elige {{ choice.choose }} competencia(s)</label>
+                        <small>Seleccionadas: {{ (selectedClassProficiencies[choiceIndex] || []).length }} / {{ choice.choose }}</small>
+                        <label v-for="option in choice.options" :key="option.index" class="proficiency-option">
+                            <input type="checkbox" :checked="(selectedClassProficiencies[choiceIndex] || []).includes(option.index)" @change="toggleClassProficiency(choiceIndex, option.index, $event.target.checked, choice.choose)" />
+                            {{ option.name }}
+                        </label>
+                    </div>
+                </template>
+                <p v-if="classLoadingError" class="error-message">{{ classLoadingError }}</p>
+            </section>
+
             <div class="form-group">
-                <label for="character-level">Nivel</label>
+                <label for="character-level">Nivel total</label>
                 <input
                     id="character-level"
                     v-model.number="newCharacter.level"
@@ -368,6 +400,11 @@ const allowedImageTypes = ["image/jpeg", "image/png", "image/webp"];
 
 const races = ref([]);
 const backgrounds = ref([]);
+const classes = ref([]);
+const selectedClassDetails = ref(null);
+const selectedClassProficiencies = ref([]);
+const loadingClassDetails = ref(false);
+const classLoadingError = ref("");
 const availableSubraces = ref([]);
 const loadingSubraces = ref(false);
 
@@ -405,6 +442,7 @@ const createEmptyCharacter = () => ({
     subrace_index: "",
     background_index: "",
     background: "",
+    class_index: "",
     level: 1,
     description: "",
     personality_trait: "",
@@ -430,6 +468,27 @@ const createEmptyCharacter = () => ({
 });
 
 const newCharacter = ref(createEmptyCharacter());
+
+const classChoiceGroups = computed(() => {
+    const groups = selectedClassDetails.value?.proficiency_choices ?? [];
+    return groups.map((group) => ({
+        choose: Number(group.choose || 0),
+        options: (group.from?.options || group.from?.option_set?.options || [])
+            .map((entry) => entry.item || entry)
+            .filter((item) => item?.index),
+    }));
+});
+
+const toggleClassProficiency = (groupIndex, proficiencyIndex, checked, maxChoices) => {
+    const current = [...(selectedClassProficiencies.value[groupIndex] || [])];
+    if (checked && current.length < maxChoices && !current.includes(proficiencyIndex)) {
+        current.push(proficiencyIndex);
+    } else if (!checked) {
+        const position = current.indexOf(proficiencyIndex);
+        if (position !== -1) current.splice(position, 1);
+    }
+    selectedClassProficiencies.value[groupIndex] = current;
+};
 
 const pointBuyTotal = computed(() => {
     if (newCharacter.value.ability_score_method !== "point_buy") {
@@ -543,17 +602,18 @@ const removeSelectedImage = () => {
 
 const loadCharacterCatalogs = async () => {
     try {
-        const [racesResponse, backgroundsResponse] = await Promise.all([
+        const [racesResponse, backgroundsResponse, classesResponse] = await Promise.all([
             api.get("/dnd/races"),
             api.get("/dnd/backgrounds"),
+            api.get("/dnd/classes"),
         ]);
 
         races.value = racesResponse.data.results ?? racesResponse.data;
-        backgrounds.value =
-            backgroundsResponse.data.results ?? backgroundsResponse.data;
+        backgrounds.value = backgroundsResponse.data.results ?? backgroundsResponse.data;
+        classes.value = classesResponse.data.results ?? classesResponse.data;
     } catch {
         error.value =
-            "No se pudieron cargar las razas o los trasfondos. Recarga la página para intentarlo de nuevo.";
+            "No se pudieron cargar las razas, los trasfondos o las clases. Recarga la página para intentarlo de nuevo.";
     }
 };
 
@@ -584,6 +644,24 @@ const onRaceChange = async () => {
     }
 };
 
+const onClassChange = async () => {
+    selectedClassDetails.value = null;
+    selectedClassProficiencies.value = [];
+    classLoadingError.value = "";
+    if (!newCharacter.value.class_index) return;
+
+    loadingClassDetails.value = true;
+    try {
+        const response = await api.get(`/dnd/classes/${newCharacter.value.class_index}`);
+        selectedClassDetails.value = response.data;
+        selectedClassProficiencies.value = (response.data.proficiency_choices || []).map(() => []);
+    } catch {
+        classLoadingError.value = "No se pudieron cargar las competencias de esta clase.";
+    } finally {
+        loadingClassDetails.value = false;
+    }
+};
+
 const createCharacter = async () => {
     if (creatingCharacter.value || characterCreated.value) {
         return;
@@ -592,6 +670,21 @@ const createCharacter = async () => {
     characterMessage.value = "";
     messageIsError.value = false;
     error.value = "";
+
+    if (!newCharacter.value.class_index || !selectedClassDetails.value) {
+        characterMessage.value = "Selecciona una clase principal válida.";
+        messageIsError.value = true;
+        return;
+    }
+
+    const missingClassChoices = classChoiceGroups.value.some((choice, index) =>
+        (selectedClassProficiencies.value[index] || []).length !== choice.choose
+    );
+    if (missingClassChoices) {
+        characterMessage.value = "Completa todas las elecciones de competencias de la clase.";
+        messageIsError.value = true;
+        return;
+    }
 
     if (
         newCharacter.value.ability_score_method === "point_buy" &&
@@ -612,6 +705,8 @@ const createCharacter = async () => {
             race_index: newCharacter.value.race_index || null,
             subrace_index: newCharacter.value.subrace_index || null,
             background_index: newCharacter.value.background_index || null,
+            class_index: newCharacter.value.class_index,
+            class_proficiencies: selectedClassProficiencies.value.flat(),
 
             level: newCharacter.value.level,
             description: newCharacter.value.description || null,

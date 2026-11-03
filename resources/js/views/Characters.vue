@@ -28,10 +28,11 @@
             </div>
 
             <div v-else class="characters-grid">
-                <article
+                <RouterLink
                     v-for="character in characters"
                     :key="character.id"
-                    class="character-card"
+                    :to="{ name: 'character-detail', params: { id: character.id } }"
+                    class="character-card character-card-link"
                 >
                     <div class="character-portrait">
                         <img
@@ -46,7 +47,7 @@
                             class="character-portrait-placeholder"
                             aria-hidden="true"
                         >
-                            🧙
+                            Sin retrato
                         </div>
                     </div>
 
@@ -75,7 +76,7 @@
                             {{ character.description }}
                         </p>
                     </div>
-                </article>
+                </RouterLink>
             </div>
         </template>
 

@@ -267,7 +267,7 @@
 <div class="contenedor">
 
 
-    <h1>🎲 D&D Campaign Manager</h1>
+    <h1> D&D Campaign Manager</h1>
 
     <p class="subtitulo">
         Panel de pruebas de la API REST
@@ -281,7 +281,7 @@
 
     <div class="bloque">
 
-        <h2>🔐 Autenticación</h2>
+        <h2> Autenticación</h2>
 
 
         <label for="email">
@@ -343,7 +343,7 @@
 
     <div class="bloque">
 
-        <h2>📚 Campañas</h2>
+        <h2> Campañas</h2>
 
 
         <div class="grid">
@@ -395,7 +395,7 @@ Esperando prueba...
 
     <div class="bloque">
 
-        <h2>🧙 Personajes</h2>
+        <h2> Personajes</h2>
 
 
         <div class="grid">
@@ -464,7 +464,7 @@ Esperando prueba...
 
     <div class="bloque">
 
-        <h2>👤 NPCs</h2>
+        <h2> NPCs</h2>
 
 
         <div class="grid">
@@ -516,7 +516,7 @@ Esperando prueba...
 
     <div class="bloque">
 
-        <h2>📍 Lugares</h2>
+        <h2> Lugares</h2>
 
 
         <div class="grid">
@@ -568,7 +568,7 @@ Esperando prueba...
 
     <div class="bloque">
 
-        <h2>📖 Sesiones de juego</h2>
+        <h2> Sesiones de juego</h2>
 
 
         <div class="grid">
@@ -620,7 +620,7 @@ Esperando prueba...
 
     <div class="bloque">
 
-        <h2>⚔️ Encuentros</h2>
+        <h2> Encuentros</h2>
 
 
         <div class="grid">
@@ -672,7 +672,7 @@ Esperando prueba...
 
     <div class="bloque">
 
-        <h2>🛡️ Combatientes</h2>
+        <h2> Combatientes</h2>
 
 
         <div class="grid">
@@ -724,7 +724,7 @@ Esperando prueba...
 
     <div class="bloque">
 
-        <h2>🚀 Prueba general</h2>
+        <h2> Prueba general</h2>
 
         <p class="nota">
             Ejecuta las consultas principales de la API de una sola vez.
@@ -910,7 +910,7 @@ async function login() {
 
 
         estado.textContent =
-            '✓ Login correcto';
+            ' Login correcto';
 
 
         estado.className =
@@ -936,7 +936,7 @@ async function login() {
 
 
         estado.textContent =
-            '✗ Error';
+            ' Error';
 
 
         estado.className =
@@ -1647,7 +1647,7 @@ async function probarTodo() {
 
 
         resultado.textContent =
-            '✓ TODAS LAS PRUEBAS CORRECTAS\n\n' +
+            ' TODAS LAS PRUEBAS CORRECTAS\n\n' +
 
             JSON.stringify(
                 resultados,
@@ -1660,7 +1660,7 @@ async function probarTodo() {
 
 
         resultado.textContent =
-            '✗ ERROR DURANTE LAS PRUEBAS\n\n' +
+            ' ERROR DURANTE LAS PRUEBAS\n\n' +
 
             error.message;
 

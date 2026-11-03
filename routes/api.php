@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CampaignController;
 use App\Http\Controllers\Api\CharacterClassController;
+use App\Http\Controllers\Api\CharacterMagicController;
 use App\Http\Controllers\Api\CharacterController;
 use App\Http\Controllers\Api\CombatantController;
 use App\Http\Controllers\Api\DndCatalogController;
@@ -85,11 +86,24 @@ Route::post('/characters/{characterId}/classes', [CharacterClassController::clas
 Route::get('/characters/{characterId}/classes/{classId}', [CharacterClassController::class, 'show'])
     ->middleware('auth:sanctum');
 
+Route::get('/characters/{characterId}/classes/{classId}/level-up-options', [CharacterClassController::class, 'levelUpOptions'])
+    ->middleware('auth:sanctum');
+
+Route::post('/characters/{characterId}/classes/{classId}/level-up', [CharacterClassController::class, 'levelUp'])
+    ->middleware('auth:sanctum');
+
 Route::put('/characters/{characterId}/classes/{classId}', [CharacterClassController::class, 'update'])
     ->middleware('auth:sanctum');
 
 Route::delete('/characters/{characterId}/classes/{classId}', [CharacterClassController::class, 'destroy'])
     ->middleware('auth:sanctum');
+
+Route::get('/characters/{characterId}/classes/{classId}/subclass-options', [CharacterMagicController::class, 'subclassOptions'])->middleware('auth:sanctum');
+Route::put('/characters/{characterId}/classes/{classId}/subclass', [CharacterMagicController::class, 'chooseSubclass'])->middleware('auth:sanctum');
+Route::get('/characters/{characterId}/classes/{classId}/spell-options', [CharacterMagicController::class, 'spellOptions'])->middleware('auth:sanctum');
+Route::put('/characters/{characterId}/classes/{classId}/spells', [CharacterMagicController::class, 'saveSpells'])->middleware('auth:sanctum');
+Route::get('/characters/{characterId}/spellcasting', [CharacterMagicController::class, 'slots'])->middleware('auth:sanctum');
+Route::patch('/characters/{characterId}/spell-slots/{slotId}', [CharacterMagicController::class, 'updateSlot'])->middleware('auth:sanctum');
 
 // Rutas para NPCs
 
@@ -183,6 +197,9 @@ Route::get('/dnd/spells/{index}', [DndSpellController::class, 'show']);
 // Rutas para la API de clases
 Route::get('/dnd/classes', [DndClassController::class, 'index']);
 Route::get('/dnd/classes/{index}', [DndClassController::class, 'show']);
+Route::get('/dnd/feats/{index}', [DndClassController::class, 'feat']);
+Route::get('/dnd/classes/{index}/levels/{level}', [DndClassController::class, 'level']);
+Route::get('/dnd/subclasses/{index}/levels/{level}', [DndClassController::class, 'subclassLevel']);
 
 // Rutas para la API de equipo
 Route::get('/dnd/equipment', [DndEquipmentController::class, 'index']);

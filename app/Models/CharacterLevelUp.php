@@ -16,6 +16,10 @@ class CharacterLevelUp extends Model
         'base_hp_gained',
         'constitution_modifier_applied',
         'total_hp_gained',
+        'feat_index',
+        'feat_name',
+        'feat_description',
+        'ability_score_increases',
     ];
 
     protected $casts = [
@@ -24,6 +28,7 @@ class CharacterLevelUp extends Model
         'base_hp_gained' => 'integer',
         'constitution_modifier_applied' => 'integer',
         'total_hp_gained' => 'integer',
+        'ability_score_increases' => 'array',
     ];
 
     public function character(): BelongsTo

@@ -6,22 +6,22 @@
 
         <div class="dashboard-grid">
             <RouterLink class="dashboard-card" to="/characters">
-                <span class="card-icon">🧙</span>
+                <span class="card-icon">PERSONAJES</span>
                 <h3>Mis personajes</h3>
                 <p>Consulta tus personajes y accede a su gestión.</p>
             </RouterLink>
             <RouterLink class="dashboard-card" to="/campaigns">
-                <span class="card-icon">🐉</span>
+                <span class="card-icon">CAMPAÑAS</span>
                 <h3>Mis campañas</h3>
                 <p>Administra las campañas en las que eres Dungeon Master.</p>
             </RouterLink>
             <RouterLink class="dashboard-card" to="/other-campaigns">
-                <span class="card-icon">🛡️</span>
+                <span class="card-icon">PARTIDAS</span>
                 <h3>Otras campañas</h3>
                 <p>Consulta las campañas donde participas como jugador.</p>
             </RouterLink>
             <RouterLink class="dashboard-card" to="/api-2014">
-                <span class="card-icon">📚</span>
+                <span class="card-icon">REGLAS</span>
                 <h3>API 2014</h3>
                 <p>Explora el catálogo de D&D 5.ª edición de 2014.</p>
             </RouterLink>

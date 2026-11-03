@@ -11,6 +11,7 @@ import CampaignDetail from '../views/CampaignDetail.vue';
 import TestCharacterApi from '../views/TestCharacterApi.vue';
 import Characters from '../views/Characters.vue';
 import CharacterCreate from '../views/CharacterCreate.vue';
+import CharacterDetail from '../views/CharacterDetail.vue';
 import OtherCampaigns from '../views/OtherCampaigns.vue';
 import DndApi2014 from '../views/DndApi2014.vue';
 
@@ -44,6 +45,12 @@ const router = createRouter({
             path: '/characters',
             name: 'characters',
             component: Characters,
+            meta: { requiresAuth: true },
+        },
+        {
+            path: '/characters/:id',
+            name: 'character-detail',
+            component: CharacterDetail,
             meta: { requiresAuth: true },
         },
         {

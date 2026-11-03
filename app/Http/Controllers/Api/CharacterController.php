@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Character;
+use App\Models\CharacterProficiency;
 use App\Services\AbilityScoreValidator;
 use App\Services\CharacterSheetCalculator;
 use App\Services\DndApiService;
@@ -66,11 +67,13 @@ class CharacterController extends Controller
         ]);
 
         $catalogData = $this->validateCatalogSelection($request);
+        $classData = $this->validateInitialClassSelection($request);
         $abilityData = $this->validateAbilityScores($request);
 
         $validated = array_merge(
             $validated,
             $catalogData,
+            $classData,
             $abilityData
         );
 
@@ -115,6 +118,9 @@ class CharacterController extends Controller
 
             'ability_score_method' => $validated['ability_score_method'] ?? null,
         ]);
+
+        $this->persistInitialClassData($character, $validated);
+        $this->persistCatalogProficiencies($character, $validated);
 
         return response()->json([
             'message' => 'Personaje creado correctamente.',
@@ -196,11 +202,13 @@ class CharacterController extends Controller
         ]);
 
         $catalogData = $this->validateCatalogSelection($request);
+        $classData = $this->validateInitialClassSelection($request);
         $abilityData = $this->validateAbilityScores($request);
 
         $validated = array_merge(
             $validated,
             $catalogData,
+            $classData,
             $abilityData
         );
 
@@ -253,6 +261,8 @@ class CharacterController extends Controller
             ]);
 
             $character->campaigns()->attach($campaign->id);
+            $this->persistInitialClassData($character, $validated);
+            $this->persistCatalogProficiencies($character, $validated);
 
             return $character;
         });
@@ -373,8 +383,15 @@ class CharacterController extends Controller
     {
         $character = Character::with([
             'user',
-            'characterClasses',
+            'characterClasses.levelUps',
             'campaigns',
+            'levelUps.characterClass',
+            'proficiencies',
+            'proficiencyOverrides',
+            'inventory',
+            'currency',
+            'spells',
+            'spellSlots',
         ])->find($id);
 
         if (! $character) {
@@ -628,6 +645,159 @@ if ((int) $character->user_id !== (int) $user->id) {
     }
 
     /**
+     * Valida la clase inicial y las elecciones de competencias contra la API 2014.
+     */
+    private function validateInitialClassSelection(Request $request): array
+    {
+        $data = $request->validate([
+            'class_index' => ['required', 'string', 'max:100'],
+            'class_proficiencies' => ['present', 'array'],
+            'class_proficiencies.*' => ['required', 'string', 'max:150'],
+        ]);
+
+        $class = app(DndApiService::class)->getClass($data['class_index']);
+        if (! $class) {
+            throw ValidationException::withMessages([
+                'class_index' => ['La clase seleccionada no existe en el catálogo D&D 5e 2014.'],
+            ]);
+        }
+
+        $choices = $class['proficiency_choices'] ?? [];
+        $requiredCount = collect($choices)->sum(fn ($choice) => (int) ($choice['choose'] ?? 0));
+        $selected = array_values(array_unique($data['class_proficiencies']));
+
+        if (count($selected) !== $requiredCount) {
+            throw ValidationException::withMessages([
+                'class_proficiencies' => ['Debes realizar exactamente todas las elecciones de competencias requeridas por la clase.'],
+            ]);
+        }
+
+        $allowed = collect($choices)->flatMap(function ($choice) {
+            return collect(data_get($choice, 'from.options', data_get($choice, 'from.option_set.options', [])))
+                ->map(fn ($option) => data_get($option, 'item.index', data_get($option, 'index')));
+        })->filter()->unique()->values()->all();
+
+        foreach ($selected as $index) {
+            if (! in_array($index, $allowed, true)) {
+                throw ValidationException::withMessages([
+                    'class_proficiencies' => ['Una de las competencias elegidas no está permitida para esta clase.'],
+                ]);
+            }
+        }
+
+        return [
+            'class_index' => $class['index'],
+            'class_name' => $class['name'],
+            'class_hit_die' => (int) ($class['hit_die'] ?? 0),
+            'class_details' => $class,
+            'class_proficiencies' => $selected,
+        ];
+    }
+
+    /**
+     * Registra la clase inicial y sus competencias sin aplicar reglas de multiclase.
+     */
+    private function persistInitialClassData(Character $character, array $data): void
+    {
+        $class = $data['class_details'];
+        $classRecord = $character->characterClasses()->create([
+            'class' => $data['class_name'],
+            'class_index' => $data['class_index'],
+            'level' => (int) $data['level'],
+            'is_primary' => true,
+            'hit_die' => $data['class_hit_die'],
+        ]);
+
+        // Al crear una ficha de nivel superior, genera sus PG iniciales e historial
+        // usando el máximo del dado al nivel 1 y el promedio acordado en niveles posteriores.
+        $hitDie = (int) $data['class_hit_die'];
+        $constitution = max(0, (int) floor((((int) ($character->constitution ?? 10) + (int) ($character->constitution_bonus ?? 0)) - 10) / 2));
+        $firstLevelHp = $hitDie + $constitution;
+        $character->maximum_hit_points = $firstLevelHp;
+        $character->current_hit_points = $firstLevelHp;
+        for ($classLevel = 2; $classLevel <= (int) $data['level']; $classLevel++) {
+            $baseHp = max(1, (int) floor($hitDie / 2));
+            $gainedHp = $baseHp + $constitution;
+            $character->maximum_hit_points += $gainedHp;
+            $character->current_hit_points += $gainedHp;
+            $character->levelUps()->create([
+                'character_class_id' => $classRecord->id,
+                'class_level' => $classLevel,
+                'hit_die' => $hitDie,
+                'hp_method' => 'average',
+                'base_hp_gained' => $baseHp,
+                'constitution_modifier_applied' => $constitution,
+                'total_hp_gained' => $gainedHp,
+            ]);
+        }
+        $character->save();
+
+        $records = [];
+        foreach (($class['saving_throws'] ?? []) as $proficiency) {
+            $records[] = $this->proficiencyRecord($proficiency, 'saving_throw', $data['class_index']);
+        }
+        foreach (($class['proficiencies'] ?? []) as $proficiency) {
+            $records[] = $this->proficiencyRecord(
+                $proficiency,
+                $this->proficiencyCategory($proficiency['index'] ?? ''),
+                $data['class_index']
+            );
+        }
+
+        $selectedIndexes = $data['class_proficiencies'] ?? [];
+        foreach (($class['proficiency_choices'] ?? []) as $choice) {
+            $options = collect(data_get($choice, 'from.options', data_get($choice, 'from.option_set.options', [])))
+                ->map(fn ($option) => data_get($option, 'item', $option));
+            foreach ($options as $option) {
+                if (in_array($option['index'] ?? null, $selectedIndexes, true)) {
+                    $records[] = $this->proficiencyRecord(
+                        $option,
+                        $this->proficiencyCategory($option['index'] ?? ''),
+                        $data['class_index']
+                    );
+                }
+            }
+        }
+
+        foreach ($records as $record) {
+            if (! empty($record['category']) && ! empty($record['proficiency_index'])) {
+                $character->proficiencies()->firstOrCreate(
+                    [
+                        'category' => $record['category'],
+                        'proficiency_index' => $record['proficiency_index'],
+                    ],
+                    $record
+                );
+            }
+        }
+    }
+
+    private function proficiencyRecord(array $proficiency, string $category, string $classIndex): array
+    {
+        return [
+            'category' => $category,
+            'proficiency_index' => $proficiency['index'] ?? '',
+            'proficiency_name' => $proficiency['name'] ?? ($proficiency['index'] ?? ''),
+            'source_type' => 'class',
+            'source_index' => $classIndex,
+            'proficiency_level' => 1,
+            'is_active' => true,
+        ];
+    }
+
+    private function proficiencyCategory(string $index): string
+    {
+        return match (true) {
+            str_starts_with($index, 'skill-') => 'skill',
+            str_starts_with($index, 'weapon-') => 'weapon',
+            str_starts_with($index, 'armor-') => 'armor',
+            str_starts_with($index, 'tool-') => 'tool',
+            str_starts_with($index, 'language-') => 'language',
+            default => '',
+        };
+    }
+
+    /**
      * Valida raza, subraza y trasfondo con el catálogo de D&D.
      */
     private function validateCatalogSelection(Request $request): array
@@ -646,6 +816,9 @@ if ((int) $character->user_id !== (int) $user->id) {
 
         $raceName = $request->input('race');
         $backgroundName = null;
+        $race = null;
+        $subrace = null;
+        $background = null;
 
         if ($subraceIndex && ! $raceIndex) {
             throw ValidationException::withMessages([
@@ -713,7 +886,55 @@ if ((int) $character->user_id !== (int) $user->id) {
             'background_index' => $backgroundIndex,
             'race' => $raceName,
             'background' => $backgroundName,
+            'race_details' => $race ?? null,
+            'subrace_details' => $subrace ?? null,
+            'background_details' => $background ?? null,
         ];
+    }
+
+    /**
+     * Guarda las competencias fijas concedidas por raza, subraza y trasfondo.
+     * Las elecciones opcionales se gestionarán en el formulario en una fase posterior.
+     */
+    private function persistCatalogProficiencies(Character $character, array $data): void
+    {
+        $sources = [
+            ['type' => 'race', 'index' => $data['race_index'] ?? null, 'details' => $data['race_details'] ?? null],
+            ['type' => 'subrace', 'index' => $data['subrace_index'] ?? null, 'details' => $data['subrace_details'] ?? null],
+            ['type' => 'background', 'index' => $data['background_index'] ?? null, 'details' => $data['background_details'] ?? null],
+        ];
+
+        foreach ($sources as $source) {
+            if (! $source['index'] || ! is_array($source['details'])) {
+                continue;
+            }
+
+            foreach (($source['details']['starting_proficiencies'] ?? []) as $proficiency) {
+                $index = $proficiency['index'] ?? null;
+                if (! $index) {
+                    continue;
+                }
+
+                $category = $this->proficiencyCategory($index);
+                if (! $category) {
+                    continue;
+                }
+
+                $character->proficiencies()->firstOrCreate(
+                    [
+                        'category' => $category,
+                        'proficiency_index' => $index,
+                    ],
+                    [
+                        'proficiency_name' => $proficiency['name'] ?? $index,
+                        'source_type' => $source['type'],
+                        'source_index' => $source['index'],
+                        'proficiency_level' => 1,
+                        'is_active' => true,
+                    ]
+                );
+            }
+        }
     }
 
     /**

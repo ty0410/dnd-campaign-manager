@@ -163,3 +163,11 @@ Queda pendiente verificar y consolidar el funcionamiento integral de las funcion
 ## Autor
 
 Proyecto desarrollado como trabajo final del ciclo de Desarrollo de Aplicaciones Web (DAW).
+
+## Progresión avanzada de personajes (D&D 5e 2014)
+
+La ficha incorpora elección de subclase, rasgos de clase/subclase por nivel, selección de conjuros por clase y cálculo de espacios de conjuro multiclase. Los espacios de Pacto del brujo se mantienen separados. También se pueden registrar los espacios utilizados y elegir entre promedio del proyecto o tirada manual al subir de nivel.
+
+Para personajes creados directamente a nivel superior, se calcula la vida inicial con el máximo del dado en nivel 1 y el promedio configurado para los niveles posteriores. Las nuevas columnas y el cambio de unicidad de los conjuros se aplican con la migración `2026_11_03_120000_add_subclasses_and_spell_sources.php`.
+
+Después de actualizar los archivos, ejecuta `php artisan migrate`. No utilices `migrate:fresh` en una base de datos con personajes existentes.

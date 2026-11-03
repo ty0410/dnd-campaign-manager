@@ -21,6 +21,28 @@ class DndClassController extends Controller
         );
     }
 
+    public function level(string $index, int $level)
+    {
+        if ($level < 1 || $level > 20) {
+            return response()->json(['message' => 'El nivel debe estar entre 1 y 20.'], 422);
+        }
+
+        $details = $this->dndApiService->getClassLevel($index, $level);
+        if ($details === null) {
+            return response()->json(['message' => 'No se encontró la progresión de esa clase para ese nivel.'], 404);
+        }
+
+        return response()->json($details);
+    }
+
+    public function subclassLevel(string $index, int $level)
+    {
+        if ($level < 1 || $level > 20) return response()->json(['message' => 'El nivel debe estar entre 1 y 20.'], 422);
+        $details = $this->dndApiService->getSubclassLevel($index, $level);
+        if ($details === null) return response()->json(['message' => 'No se encontró la progresión de esa subclase.'], 404);
+        return response()->json($details);
+    }
+
     public function show(string $index)
     {
         $class = $this->dndApiService->getClass($index);
@@ -33,4 +55,12 @@ class DndClassController extends Controller
 
         return response()->json($class);
     }
+
+    public function feat(string $index)
+    {
+        $feat = $this->dndApiService->getFeat($index);
+        if ($feat === null) return response()->json(['message' => 'Dote no encontrada.'], 404);
+        return response()->json($feat);
+    }
+
 }
