@@ -11,15 +11,19 @@ class AuthController extends Controller
 {
     $validated = $request->validate([
         'name' => ['required', 'string', 'max:255'],
+        'username' => ['required', 'string', 'min:3', 'max:30', 'regex:/^[A-Za-z0-9_]+$/', 'unique:users,username'],
         'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
         'password' => ['required', 'string', 'min:8', 'confirmed'],
     ]);
 
+    // El registro público solo crea usuarios normales: el rol no es asignable
+    // en masa y la base de datos lo fija a «user» por defecto.
     $user = \App\Models\User::create([
         'name' => $validated['name'],
+        'username' => $validated['username'],
         'email' => $validated['email'],
         'password' => $validated['password'],
-    ]);
+    ])->fresh();
 
     $token = $user->createToken('api-token')->plainTextToken;
 
@@ -46,6 +50,12 @@ public function login(Request $request)
     }
 
     $user = \App\Models\User::where('email', $validated['email'])->first();
+
+    if ($user->isDeactivated()) {
+        return response()->json([
+            'message' => 'Esta cuenta ha sido dada de baja. Contacta con un administrador.',
+        ], 403);
+    }
 
     $token = $user->createToken('api-token')->plainTextToken;
 

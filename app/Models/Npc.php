@@ -14,7 +14,29 @@ class Npc extends Model
         'role',
         'description',
         'location',
+        'image_path',
     ];
+
+    protected $appends = ['image_url'];
+
+    protected function imageUrl(): \Illuminate\Database\Eloquent\Casts\Attribute
+    {
+        return \Illuminate\Database\Eloquent\Casts\Attribute::get(
+            fn () => $this->image_path
+                ? \Illuminate\Support\Facades\Storage::disk('public')->url($this->image_path)
+                : null
+        );
+    }
+
+    public function customAttributes(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(NpcAttribute::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    public function notes(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(NpcNote::class);
+    }
 
     /**
      * Campaña a la que pertenece el NPC.

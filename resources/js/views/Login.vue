@@ -1,5 +1,5 @@
 <template>
-    <main>
+    <main class="auth-page">
         <h1>Iniciar sesión</h1>
 
         <form @submit.prevent="login">
@@ -32,7 +32,7 @@
             </button>
         </form>
 
-        <p v-if="message">
+        <p v-if="message" :class="messageIsError ? 'error-message' : 'success-message'" role="alert">
             {{ message }}
         </p>
 
@@ -53,9 +53,11 @@ const router = useRouter();
 const email = ref('');
 const password = ref('');
 const message = ref('');
+const messageIsError = ref(false);
 
 const login = async () => {
     message.value = '';
+    messageIsError.value = false;
 
     try { // Hacemos una solicitud POST al endpoint de inicio de sesión con el correo electrónico y la contraseña
         const response = await api.post('/login', {
@@ -72,7 +74,8 @@ const login = async () => {
         router.replace(typeof router.currentRoute.value.query.redirect === 'string'
             ? router.currentRoute.value.query.redirect
             : '/dashboard');
-    } catch (error) { // Si ocurre un error, mostramos el mensaje de error correspondiente
+    } catch (error) {
+        messageIsError.value = true; // Si ocurre un error, mostramos el mensaje de error correspondiente
         if (error.response) {
             message.value = error.response.data.message;
         } else {

@@ -3,389 +3,274 @@
         <header class="page-header">
             <h1>Crear personaje</h1>
             <p>
-                Crea tu personaje y guárdalo en tu colección. Podrás asignarlo a
-                tus campañas más adelante.
+                Sigue los pasos de arriba abajo: quién es, de dónde viene, qué sabe hacer y cómo es.{{ route.query.campaign_id ? ' Al terminar se pedirá añadirlo a la campaña seleccionada (si no eres su Dungeon Master, tendrá que aprobarlo).' : ' Podrás asignarlo a tus campañas más adelante.' }}
             </p>
         </header>
 
-        <p v-if="error" class="error-message" role="alert">
-            {{ error }}
-        </p>
+        <p v-if="error" class="error-message" role="alert">{{ error }}</p>
 
-        <form class="character-form" @submit.prevent="createCharacter">
-            <h2>Información básica</h2>
+        <div class="creator-layout">
+            <form class="character-form creator-form" @submit.prevent="createCharacter">
 
-            <div class="form-group character-image-group">
-                <label for="character-image">
-                    Retrato del personaje (opcional)
-                </label>
-
-                <div class="character-image-preview">
-                    <img
-                        v-if="imagePreview"
-                        :src="imagePreview"
-                        alt="Vista previa del retrato del personaje"
-                    />
-                    <span v-else aria-hidden="true">Sin retrato</span>
-                </div>
-
-                <input
-                    id="character-image"
-                    type="file"
-                    accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-                    @change="onImageSelected"
-                />
-
-                <small>Formatos JPG, PNG o WebP. Tamaño máximo: 2 MB.</small>
-
-                <button
-                    v-if="selectedImage"
-                    type="button"
-                    class="secondary-button"
-                    @click="removeSelectedImage"
-                >
-                    Quitar imagen
-                </button>
-            </div>
-
-            <div class="form-group">
-                <label for="character-name">Nombre del personaje</label>
-                <input
-                    id="character-name"
-                    v-model="newCharacter.name"
-                    type="text"
-                    maxlength="255"
-                    placeholder="Ej. Arthas"
-                    required
-                />
-            </div>
-
-            <div class="form-group">
-                <label for="character-race">Raza</label>
-                <select
-                    id="character-race"
-                    v-model="newCharacter.race_index"
-                    @change="onRaceChange"
-                    required
-                >
-                    <option value="">Selecciona una raza</option>
-                    <option
-                        v-for="race in races"
-                        :key="race.index"
-                        :value="race.index"
-                    >
-                        {{ race.name }}
-                    </option>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label for="character-subrace">Subraza</label>
-                <select
-                    id="character-subrace"
-                    v-model="newCharacter.subrace_index"
-                    :disabled="!newCharacter.race_index || loadingSubraces"
-                >
-                    <option value="">Sin subraza</option>
-                    <option
-                        v-for="subrace in availableSubraces"
-                        :key="subrace.index"
-                        :value="subrace.index"
-                    >
-                        {{ subrace.name }}
-                    </option>
-                </select>
-                <small v-if="loadingSubraces">Cargando subrazas...</small>
-            </div>
-
-            <div class="form-group">
-                <label for="character-background">Trasfondo</label>
-                <select
-                    id="character-background"
-                    v-model="newCharacter.background_index"
-                >
-                    <option value="">Selecciona un trasfondo</option>
-                    <option
-                        v-for="background in backgrounds"
-                        :key="background.index"
-                        :value="background.index"
-                    >
-                        {{ background.name }}
-                    </option>
-                </select>
-            </div>
-
-            <section class="class-selection-section">
-                <h2>Clase y competencias</h2>
-                <p>Selecciona la clase inicial. Si empiezas a un nivel superior, todos esos niveles se asignarán inicialmente a esta clase.</p>
-
-                <div class="form-group">
-                    <label for="character-class">Clase principal</label>
-                    <select id="character-class" v-model="newCharacter.class_index" @change="onClassChange" required>
-                        <option value="">Selecciona una clase</option>
-                        <option v-for="item in classes" :key="item.index" :value="item.index">{{ item.name }}</option>
-                    </select>
-                </div>
-
-                <p v-if="loadingClassDetails">Cargando competencias de clase...</p>
-                <template v-if="selectedClassDetails">
-                    <p><strong>Dado de golpe:</strong> d{{ selectedClassDetails.hit_die }}</p>
-                    <div class="class-proficiencies-summary">
-                        <h3>Competencias automáticas</h3>
-                        <p><strong>Tiradas de salvación:</strong> {{ (selectedClassDetails.saving_throws || []).map(item => item.name).join(', ') || 'Ninguna' }}</p>
-                        <p><strong>Armaduras, armas y herramientas:</strong> {{ (selectedClassDetails.proficiencies || []).map(item => item.name).join(', ') || 'Ninguna' }}</p>
-                    </div>
-                    <div v-for="(choice, choiceIndex) in classChoiceGroups" :key="choiceIndex" class="form-group">
-                        <label>Elige {{ choice.choose }} competencia(s)</label>
-                        <small>Seleccionadas: {{ (selectedClassProficiencies[choiceIndex] || []).length }} / {{ choice.choose }}</small>
-                        <label v-for="option in choice.options" :key="option.index" class="proficiency-option">
-                            <input type="checkbox" :checked="(selectedClassProficiencies[choiceIndex] || []).includes(option.index)" @change="toggleClassProficiency(choiceIndex, option.index, $event.target.checked, choice.choose)" />
-                            {{ option.name }}
-                        </label>
-                    </div>
-                </template>
-                <p v-if="classLoadingError" class="error-message">{{ classLoadingError }}</p>
-            </section>
-
-            <div class="form-group">
-                <label for="character-level">Nivel total</label>
-                <input
-                    id="character-level"
-                    v-model.number="newCharacter.level"
-                    type="number"
-                    min="1"
-                    max="20"
-                    required
-                />
-            </div>
-
-            <h2>Personalidad</h2>
-
-            <div class="form-group">
-                <label for="personality_trait">Rasgo de personalidad</label>
-                <textarea
-                    id="personality_trait"
-                    v-model="newCharacter.personality_trait"
-                    rows="2"
-                    placeholder="¿Cómo se comporta tu personaje?"
-                ></textarea>
-            </div>
-
-            <div class="form-group">
-                <label for="ideal">Ideal</label>
-                <textarea
-                    id="ideal"
-                    v-model="newCharacter.ideal"
-                    rows="2"
-                    placeholder="¿Qué principio guía a tu personaje?"
-                ></textarea>
-            </div>
-
-            <div class="form-group">
-                <label for="bond">Vínculo</label>
-                <textarea
-                    id="bond"
-                    v-model="newCharacter.bond"
-                    rows="2"
-                    placeholder="¿Qué persona, lugar u objeto es importante?"
-                ></textarea>
-            </div>
-
-            <div class="form-group">
-                <label for="flaw">Defecto</label>
-                <textarea
-                    id="flaw"
-                    v-model="newCharacter.flaw"
-                    rows="2"
-                    placeholder="¿Qué debilidad tiene tu personaje?"
-                ></textarea>
-            </div>
-
-            <div class="form-group">
-                <label for="notes">Notas adicionales</label>
-                <textarea
-                    id="notes"
-                    v-model="newCharacter.notes"
-                    rows="4"
-                    placeholder="Información adicional sobre tu personaje..."
-                ></textarea>
-            </div>
-
-            <section class="ability-score-section">
-                <h2>Características</h2>
-
-                <div class="form-group">
-                    <label for="ability-score-method">
-                        Método de asignación
-                    </label>
-                    <select
-                        id="ability-score-method"
-                        v-model="newCharacter.ability_score_method"
-                        @change="onAbilityMethodChange"
-                    >
-                        <option value="manual">Asignación manual</option>
-                        <option value="standard_array">Array estándar</option>
-                        <option value="point_buy">Compra de puntos</option>
-                    </select>
-                </div>
-
-                <p v-if="newCharacter.ability_score_method === 'manual'">
-                    Introduce cada puntuación entre 1 y 20.
-                </p>
-
-                <p
-                    v-else-if="
-                        newCharacter.ability_score_method === 'standard_array'
-                    "
-                >
-                    El array estándar utiliza 15, 14, 13, 12, 10 y 8. Puedes
-                    modificar las puntuaciones después de aplicarlo.
-                </p>
-
-                <template
-                    v-else-if="
-                        newCharacter.ability_score_method === 'point_buy'
-                    "
-                >
-                    <p>
-                        Las puntuaciones pueden ir de 1 a 15. Los valores del 1
-                        al 8 cuestan 0 puntos. Dispones de un máximo de 27
-                        puntos.
-                    </p>
-
-                    <p>
-                        Puntos utilizados:
-                        <strong>
-                            {{ pointBuyTotal === null ? "—" : pointBuyTotal }}
-                            / 27
-                        </strong>
-                    </p>
-
-                    <p
-                        v-if="pointBuyTotal !== null && pointBuyTotal > 27"
-                        class="error-message"
-                    >
-                        Has superado el límite de puntos.
-                    </p>
-                </template>
-
-                <div class="ability-score-grid">
-                    <div
-                        v-for="ability in abilities"
-                        :key="ability.key"
-                        class="ability-score-card"
-                    >
-                        <h3>{{ ability.label }}</h3>
-
-                        <div class="form-group">
-                            <label :for="`score-${ability.key}`">
-                                Puntuación base
-                            </label>
-                            <input
-                                :id="`score-${ability.key}`"
-                                v-model.number="newCharacter[ability.key]"
-                                type="number"
-                                min="1"
-                                :max="
-                                    newCharacter.ability_score_method ===
-                                    'point_buy'
-                                        ? 15
-                                        : 20
-                                "
-                                required
-                            />
+                <!-- 1. Identidad -->
+                <section class="creator-section">
+                    <header class="creator-section-header">
+                        <span class="creator-step">1</span>
+                        <div><h2>Identidad</h2><p>El nombre y el aspecto de tu personaje.</p></div>
+                    </header>
+                    <div class="creator-grid creator-grid--identity">
+                        <div class="creator-portrait">
+                            <div class="character-image-preview">
+                                <img v-if="imagePreview" :src="imagePreview" alt="Vista previa del retrato del personaje" />
+                                <span v-else aria-hidden="true">?</span>
+                            </div>
+                            <label for="character-image">Retrato (opcional)</label>
+                            <input id="character-image" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" @change="onImageSelected" />
+                            <small>JPG, PNG o WebP. Máximo 2 MB.</small>
+                            <button v-if="selectedImage" type="button" class="secondary-button" @click="removeSelectedImage">Quitar imagen</button>
                         </div>
-
                         <div class="form-group">
-                            <label :for="`bonus-${ability.key}`">
-                                Bono personalizado
-                            </label>
-                            <input
-                                :id="`bonus-${ability.key}`"
-                                v-model.number="newCharacter[ability.bonus]"
-                                type="number"
-                                min="-5"
-                                max="5"
-                                required
-                            />
+                            <label for="character-name">Nombre del personaje</label>
+                            <input id="character-name" v-model="newCharacter.name" type="text" maxlength="255" placeholder="Ej. Arthas" required />
                         </div>
-
-                        <p>
-                            Puntuación efectiva:
-                            <strong>
-                                {{ effectiveScore(ability.key, ability.bonus) }}
-                            </strong>
-                        </p>
-
-                        <p>
-                            Modificador:
-                            <strong>
-                                {{
-                                    abilityModifier(
-                                        newCharacter[ability.key],
-                                        newCharacter[ability.bonus],
-                                    )
-                                }}
-                            </strong>
-                        </p>
                     </div>
+                </section>
+
+                <!-- 2. Linaje -->
+                <section class="creator-section">
+                    <header class="creator-section-header">
+                        <span class="creator-step">2</span>
+                        <div><h2>Linaje</h2><p>Su raza y, si la tiene, su subraza.</p></div>
+                    </header>
+                    <div class="creator-grid">
+                        <div class="form-group">
+                            <label for="character-race">Raza</label>
+                            <select id="character-race" v-model="newCharacter.race_index" @change="onRaceChange" required>
+                                <option value="">Selecciona una raza</option>
+                                <option v-for="race in races" :key="race.index" :value="race.index">{{ race.name }}</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="character-subrace">Subraza</label>
+                            <select id="character-subrace" v-model="newCharacter.subrace_index" :disabled="!newCharacter.race_index || loadingSubraces">
+                                <option value="">Sin subraza</option>
+                                <option v-for="subrace in availableSubraces" :key="subrace.index" :value="subrace.index">{{ subrace.name }}</option>
+                            </select>
+                            <small v-if="loadingSubraces">Cargando subrazas...</small>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 3. Clase y nivel -->
+                <section class="creator-section">
+                    <header class="creator-section-header">
+                        <span class="creator-step">3</span>
+                        <div><h2>Clase y nivel</h2><p>Si empiezas por encima del nivel 1, todos esos niveles se asignan a esta clase.</p></div>
+                    </header>
+                    <div class="creator-grid">
+                        <div class="form-group">
+                            <label for="character-class">Clase principal</label>
+                            <select id="character-class" v-model="newCharacter.class_index" @change="onClassChange" required>
+                                <option value="">Selecciona una clase</option>
+                                <option v-for="item in classes" :key="item.index" :value="item.index">{{ item.name }}</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="character-level">Nivel total</label>
+                            <input id="character-level" v-model.number="newCharacter.level" type="number" min="1" max="20" required />
+                        </div>
+                    </div>
+
+                    <p v-if="loadingClassDetails" class="muted">Cargando competencias de clase...</p>
+                    <div v-if="selectedClassDetails" class="class-details">
+                        <p><strong>Dado de golpe:</strong> d{{ selectedClassDetails.hit_die }}</p>
+                        <div class="class-proficiencies-summary">
+                            <h3>Competencias automáticas</h3>
+                            <p><strong>Tiradas de salvación:</strong> {{ (selectedClassDetails.saving_throws || []).map(item => item.name).join(', ') || 'Ninguna' }}</p>
+                            <p><strong>Armaduras, armas y herramientas:</strong> {{ (selectedClassDetails.proficiencies || []).map(item => item.name).join(', ') || 'Ninguna' }}</p>
+                        </div>
+                        <fieldset v-for="(choice, choiceIndex) in classChoiceGroups" :key="choiceIndex" class="choice-group">
+                            <legend>Elige {{ choice.choose }} competencia(s) <small>({{ (selectedClassProficiencies[choiceIndex] || []).length }} / {{ choice.choose }})</small></legend>
+                            <div class="choice-options">
+                                <label v-for="option in choice.options" :key="option.index" class="proficiency-option">
+                                    <input type="checkbox" :checked="(selectedClassProficiencies[choiceIndex] || []).includes(option.index)" @change="toggleClassProficiency(choiceIndex, option.index, $event.target.checked, choice.choose)" />
+                                    {{ option.name }}
+                                </label>
+                            </div>
+                        </fieldset>
+                    </div>
+                    <p v-if="classLoadingError" class="error-message">{{ classLoadingError }}</p>
+                </section>
+
+                <!-- 4. Trasfondo -->
+                <section class="creator-section">
+                    <header class="creator-section-header">
+                        <span class="creator-step">4</span>
+                        <div><h2>Trasfondo</h2><p>Lo que hacía tu personaje antes de la aventura.</p></div>
+                    </header>
+                    <div class="form-group">
+                        <label for="character-background">Trasfondo</label>
+                        <select id="character-background" v-model="newCharacter.background_index">
+                            <option value="">Selecciona un trasfondo</option>
+                            <option v-for="background in backgrounds" :key="background.index" :value="background.index">{{ background.name }}</option>
+                        </select>
+                    </div>
+                </section>
+
+                <!-- 5. Características -->
+                <section class="creator-section ability-score-section">
+                    <header class="creator-section-header">
+                        <span class="creator-step">5</span>
+                        <div><h2>Características</h2><p>Las seis puntuaciones que definen lo que mejor sabe hacer.</p></div>
+                    </header>
+
+                    <div class="form-group method-group">
+                        <label for="ability-score-method">Método de asignación</label>
+                        <select id="ability-score-method" v-model="newCharacter.ability_score_method" @change="onAbilityMethodChange">
+                            <option value="manual">Asignación manual</option>
+                            <option value="standard_array">Array estándar</option>
+                            <option value="point_buy">Compra de puntos</option>
+                        </select>
+                    </div>
+
+                    <p v-if="newCharacter.ability_score_method === 'manual'" class="method-help">Introduce cada puntuación entre 1 y 20.</p>
+                    <div v-else-if="newCharacter.ability_score_method === 'standard_array'" class="standard-pool">
+                        <p class="method-help">Reparte estos seis valores como quieras, <strong>uno por característica</strong>. Los que ya has usado se atenúan.</p>
+                        <div class="pool-chips" aria-label="Valores del array estándar">
+                            <span v-for="value in STANDARD_ARRAY" :key="value" class="pool-chip" :class="{ 'is-used': !remainingStandard.includes(value) }">{{ value }}</span>
+                        </div>
+                        <div class="pool-actions">
+                            <button type="button" class="secondary-button" @click="suggestStandardArray">Reparto sugerido</button>
+                            <button type="button" class="secondary-button" @click="clearStandardArray">Vaciar</button>
+                        </div>
+                    </div>
+                    <template v-else-if="newCharacter.ability_score_method === 'point_buy'">
+                        <p class="method-help">Sube o baja cada característica con − y +. Todas empiezan en 8, tienes 27 puntos para repartir y el máximo es 15.</p>
+                        <p class="points-used" :class="{ 'is-over': pointBuyTotal !== null && pointBuyTotal > 27 }">
+                            Puntos utilizados: <strong>{{ pointBuyTotal === null ? "—" : pointBuyTotal }} / 27</strong> · Restantes: <strong>{{ pointsLeft }}</strong>
+                        </p>
+                        <p v-if="pointBuyTotal !== null && pointBuyTotal > 27" class="error-message">Has superado el límite de puntos.</p>
+                    </template>
+
+                    <div class="ability-score-grid">
+                        <div v-for="ability in abilities" :key="ability.key" class="ability-score-card">
+                            <h3>{{ ability.label }}</h3>
+                            <div class="ability-inputs">
+                                <div class="form-group">
+                                    <label :for="`score-${ability.key}`">Base</label>
+
+                                    <select v-if="newCharacter.ability_score_method === 'standard_array'" :id="`score-${ability.key}`" v-model.number="newCharacter[ability.key]" required>
+                                        <option value="">—</option>
+                                        <option v-for="value in STANDARD_ARRAY" :key="value" :value="value" :disabled="isStandardValueTaken(value, ability.key)">{{ value }}</option>
+                                    </select>
+
+                                    <div v-else-if="newCharacter.ability_score_method === 'point_buy'" class="stepper">
+                                        <button type="button" class="icon-button" :disabled="Number(newCharacter[ability.key]) <= 8" :aria-label="`Bajar ${ability.label}`" @click="adjustPoint(ability.key, -1)">−</button>
+                                        <output :id="`score-${ability.key}`" class="stepper-value">{{ newCharacter[ability.key] }}</output>
+                                        <button type="button" class="icon-button" :disabled="!canRaise(ability.key)" :aria-label="`Subir ${ability.label}`" @click="adjustPoint(ability.key, 1)">+</button>
+                                    </div>
+
+                                    <input v-else :id="`score-${ability.key}`" v-model.number="newCharacter[ability.key]" type="number" min="1" max="20" required />
+                                </div>
+                                <div class="form-group">
+                                    <label :for="`bonus-${ability.key}`">Bono</label>
+                                    <input :id="`bonus-${ability.key}`" v-model.number="newCharacter[ability.bonus]" type="number" min="-5" max="5" required />
+                                </div>
+                            </div>
+                            <p class="ability-result">
+                                <span>Efectiva <strong>{{ effectiveScore(ability.key, ability.bonus) }}</strong></span>
+                                <span>Mod. <strong>{{ abilityModifier(newCharacter[ability.key], newCharacter[ability.bonus]) }}</strong></span>
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 6. Personalidad -->
+                <section class="creator-section">
+                    <header class="creator-section-header">
+                        <span class="creator-step">6</span>
+                        <div><h2>Personalidad</h2><p>Cómo piensa y cómo actúa.</p></div>
+                    </header>
+                    <div class="creator-grid">
+                        <div class="form-group">
+                            <label for="personality_trait">Rasgo de personalidad</label>
+                            <textarea id="personality_trait" v-model="newCharacter.personality_trait" rows="3" placeholder="¿Cómo se comporta tu personaje?"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="ideal">Ideal</label>
+                            <textarea id="ideal" v-model="newCharacter.ideal" rows="3" placeholder="¿Qué principio guía a tu personaje?"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="bond">Vínculo</label>
+                            <textarea id="bond" v-model="newCharacter.bond" rows="3" placeholder="¿Qué persona, lugar u objeto es importante?"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="flaw">Defecto</label>
+                            <textarea id="flaw" v-model="newCharacter.flaw" rows="3" placeholder="¿Qué debilidad tiene tu personaje?"></textarea>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 7. Historia -->
+                <section class="creator-section">
+                    <header class="creator-section-header">
+                        <span class="creator-step">7</span>
+                        <div><h2>Historia y notas</h2><p>Todo lo demás que quieras recordar.</p></div>
+                    </header>
+                    <div class="form-group">
+                        <label for="character-description">Descripción</label>
+                        <textarea id="character-description" v-model="newCharacter.description" rows="4" placeholder="Historia, apariencia y otros detalles..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="notes">Notas adicionales</label>
+                        <textarea id="notes" v-model="newCharacter.notes" rows="4" placeholder="Información adicional sobre tu personaje..."></textarea>
+                    </div>
+                </section>
+
+                <p v-if="characterMessage" aria-live="polite" :class="messageIsError ? 'error-message' : 'success-message'">{{ characterMessage }}</p>
+
+                <div class="creator-actions">
+                    <RouterLink to="/characters" class="secondary-button">Cancelar</RouterLink>
+                    <RouterLink v-if="characterCreated" to="/characters" class="secondary-button">Ir a mis personajes</RouterLink>
+                    <button type="submit" class="primary-button" :disabled="creatingCharacter || characterCreated">
+                        {{ creatingCharacter ? "Creando personaje..." : characterCreated ? "Personaje creado" : "Crear personaje" }}
+                    </button>
                 </div>
-            </section>
+            </form>
 
-            <div class="form-group">
-                <label for="character-description">Descripción</label>
-                <textarea
-                    id="character-description"
-                    v-model="newCharacter.description"
-                    rows="4"
-                    placeholder="Historia, apariencia y otros detalles..."
-                ></textarea>
-            </div>
-
-            <div class="form-actions">
-                <button
-                    type="submit"
-                    :disabled="creatingCharacter || characterCreated"
-                >
-                    {{
-                        creatingCharacter
-                            ? "Creando personaje..."
-                            : characterCreated
-                              ? "Personaje creado"
-                              : "Crear personaje"
-                    }}
-                </button>
-
-                <RouterLink to="/characters" class="back-link">
-                    Cancelar
-                </RouterLink>
-
-                <RouterLink
-                    v-if="characterCreated"
-                    to="/characters"
-                    class="back-link"
-                >
-                    Ir a mis personajes
-                </RouterLink>
-            </div>
-
-            <p
-                v-if="characterMessage"
-                aria-live="polite"
-                :class="messageIsError ? 'error-message' : 'success-message'"
-            >
-                {{ characterMessage }}
-            </p>
-        </form>
+            <!-- Resumen en vivo -->
+            <aside class="creator-summary" aria-label="Resumen del personaje">
+                <h2>Resumen</h2>
+                <div class="summary-portrait">
+                    <img v-if="imagePreview" :src="imagePreview" alt="" />
+                    <span v-else aria-hidden="true">{{ summary.name?.slice(0, 1)?.toUpperCase() || '?' }}</span>
+                </div>
+                <p class="summary-name">{{ summary.name || 'Sin nombre' }}</p>
+                <dl class="summary-list">
+                    <div><dt>Raza</dt><dd>{{ summary.race || '—' }}<template v-if="summary.subrace"> ({{ summary.subrace }})</template></dd></div>
+                    <div><dt>Clase</dt><dd>{{ summary.className || '—' }}</dd></div>
+                    <div><dt>Nivel</dt><dd>{{ summary.level || '—' }}</dd></div>
+                    <div><dt>Trasfondo</dt><dd>{{ summary.background || '—' }}</dd></div>
+                </dl>
+                <ul class="summary-abilities">
+                    <li v-for="ability in abilities" :key="ability.key">
+                        <span>{{ ability.label.slice(0, 3).toUpperCase() }}</span>
+                        <strong>{{ effectiveScore(ability.key, ability.bonus) }}</strong>
+                        <small>{{ abilityModifier(newCharacter[ability.key], newCharacter[ability.bonus]) }}</small>
+                    </li>
+                </ul>
+            </aside>
+        </div>
     </main>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from "vue";
-import { RouterLink, useRouter } from "vue-router";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 import api from "../services/api";
 
 const router = useRouter();
+const route = useRoute();
 
 const error = ref("");
 const creatingCharacter = ref(false);
@@ -540,12 +425,65 @@ const abilityModifier = (score, bonus) => {
     return modifier >= 0 ? `+${modifier}` : String(modifier);
 };
 
-const onAbilityMethodChange = () => {
-    if (newCharacter.value.ability_score_method === "standard_array") {
-        const standardArray = [15, 14, 13, 12, 10, 8];
+// Array estándar: cada valor se usa una sola vez y se reparte como se quiera.
+const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8];
 
-        abilities.forEach((ability, index) => {
-            newCharacter.value[ability.key] = standardArray[index];
+const remainingStandard = computed(() => {
+    const used = abilities.map((ability) => newCharacter.value[ability.key]);
+    return STANDARD_ARRAY.filter((value) => !used.includes(value));
+});
+
+const isStandardValueTaken = (value, key) =>
+    abilities.some((ability) => ability.key !== key && newCharacter.value[ability.key] === value);
+
+const suggestStandardArray = () => {
+    abilities.forEach((ability, index) => {
+        newCharacter.value[ability.key] = STANDARD_ARRAY[index];
+    });
+};
+
+const clearStandardArray = () => {
+    abilities.forEach((ability) => {
+        newCharacter.value[ability.key] = "";
+    });
+};
+
+// Compra de puntos: − y + con el coste a la vista.
+const pointsLeft = computed(() => 27 - (pointBuyTotal.value ?? 0));
+
+const canRaise = (key) => {
+    const current = Number(newCharacter.value[key]);
+
+    if (!Number.isInteger(current) || current >= 15) {
+        return false;
+    }
+
+    return pointCosts[current + 1] - pointCosts[current] <= pointsLeft.value;
+};
+
+const adjustPoint = (key, delta) => {
+    const current = Number(newCharacter.value[key]);
+    const next = current + delta;
+
+    if (next < 8 || next > 15) {
+        return;
+    }
+
+    if (delta > 0 && !canRaise(key)) {
+        return;
+    }
+
+    newCharacter.value[key] = next;
+};
+
+const onAbilityMethodChange = () => {
+    const method = newCharacter.value.ability_score_method;
+
+    if (method === "standard_array") {
+        clearStandardArray();
+    } else if (method === "point_buy") {
+        abilities.forEach((ability) => {
+            newCharacter.value[ability.key] = 8;
         });
     }
 };
@@ -677,6 +615,16 @@ const createCharacter = async () => {
         return;
     }
 
+    if (
+        newCharacter.value.ability_score_method === "standard_array" &&
+        remainingStandard.value.length > 0
+    ) {
+        characterMessage.value =
+            "Reparte los seis valores del array estándar entre las características.";
+        messageIsError.value = true;
+        return;
+    }
+
     const missingClassChoices = classChoiceGroups.value.some((choice, index) =>
         (selectedClassProficiencies.value[index] || []).length !== choice.choose
     );
@@ -774,7 +722,13 @@ const createCharacter = async () => {
             }
         }
 
-        await router.push("/characters");
+        const campaignId = route.query.campaign_id;
+        if (campaignId) {
+            await api.post(`/campaigns/${campaignId}/characters/${characterId}`);
+            await router.push(`/campaigns/${campaignId}`);
+        } else {
+            await router.push("/characters");
+        }
     } catch (err) {
         if (err.response?.data?.errors) {
             characterMessage.value = Object.values(err.response.data.errors)
@@ -792,6 +746,17 @@ const createCharacter = async () => {
         creatingCharacter.value = false;
     }
 };
+
+// Resumen en vivo de lo elegido hasta ahora.
+const nameOf = (list, index) => list.find((entry) => entry.index === index)?.name || '';
+const summary = computed(() => ({
+    name: newCharacter.value.name,
+    race: nameOf(races.value, newCharacter.value.race_index),
+    subrace: nameOf(availableSubraces.value, newCharacter.value.subrace_index),
+    className: nameOf(classes.value, newCharacter.value.class_index),
+    level: newCharacter.value.level,
+    background: nameOf(backgrounds.value, newCharacter.value.background_index),
+}));
 
 onMounted(() => {
     loadCharacterCatalogs();

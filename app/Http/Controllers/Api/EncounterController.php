@@ -44,8 +44,9 @@ class EncounterController extends Controller
         $validated = $request->validate([
             'game_session_id' => ['nullable', 'integer', 'exists:game_sessions,id'],
             'name' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string'],
-            'type' => ['nullable', 'string', 'in:combat,social,exploration,puzzle'],
+            'description' => ['nullable', 'string', 'max:3000'],
+            // Por ahora solo existen encuentros de combate (el gestor de otros tipos no está diseñado).
+            'type' => ['nullable', 'string', 'in:combat'],
             'status' => ['nullable', 'string', 'in:planned,active,completed'],
         ]);
 
@@ -65,7 +66,7 @@ class EncounterController extends Controller
             'game_session_id' => $validated['game_session_id'] ?? null,
             'name' => $validated['name'],
             'description' => $validated['description'] ?? null,
-            'type' => $validated['type'] ?? 'combat',
+            'type' => 'combat',
             'status' => $validated['status'] ?? 'planned',
         ]);
 
@@ -127,8 +128,9 @@ class EncounterController extends Controller
         $validated = $request->validate([
             'game_session_id' => ['nullable', 'integer', 'exists:game_sessions,id'],
             'name' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string'],
-            'type' => ['nullable', 'string', 'in:combat,social,exploration,puzzle'],
+            'description' => ['nullable', 'string', 'max:3000'],
+            // Por ahora solo existen encuentros de combate (el gestor de otros tipos no está diseñado).
+            'type' => ['nullable', 'string', 'in:combat'],
             'status' => ['nullable', 'string', 'in:planned,active,completed'],
         ]);
 
@@ -148,7 +150,7 @@ class EncounterController extends Controller
             'game_session_id' => $validated['game_session_id'] ?? null,
             'name' => $validated['name'],
             'description' => $validated['description'] ?? null,
-            'type' => $validated['type'] ?? 'combat',
+            'type' => 'combat',
             'status' => $validated['status'] ?? 'planned',
         ]);
 

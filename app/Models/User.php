@@ -13,12 +13,61 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password'])]
+#[Fillable(['name', 'username', 'email', 'password'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
+
+    public const ROLE_USER = 'user';
+    public const ROLE_ADMIN = 'admin';
+
+    public function isAdmin(): bool
+    {
+        return $this->role === self::ROLE_ADMIN;
+    }
+
+    /**
+     * Nombre de usuario libre derivado de un texto (nombre, parte local del correo...).
+     */
+    public static function makeUsername(string $base): string
+    {
+        $slug = \Illuminate\Support\Str::of(\Illuminate\Support\Str::ascii($base))
+            ->lower()
+            ->replaceMatches('/[^a-z0-9]+/', '_')
+            ->trim('_')
+            ->limit(22, '')
+            ->toString() ?: 'usuario';
+
+        $candidate = $slug;
+        $n = 1;
+
+        while (static::where('username', $candidate)->exists()) {
+            $candidate = $slug . '_' . (++$n);
+        }
+
+        return $candidate;
+    }
+
+    public function isDeactivated(): bool
+    {
+        return $this->deactivated_at !== null;
+    }
+
+    /**
+     * URL pública de la foto de perfil (null si no tiene).
+     */
+    protected function avatarUrl(): \Illuminate\Database\Eloquent\Casts\Attribute
+    {
+        return \Illuminate\Database\Eloquent\Casts\Attribute::get(
+            fn () => $this->avatar_path
+                ? \Illuminate\Support\Facades\Storage::disk('public')->url($this->avatar_path)
+                : null
+        );
+    }
+
+    protected $appends = ['avatar_url'];
 
     /**
      * Campañas donde el usuario es Dungeon Master.
@@ -62,6 +111,7 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'deactivated_at' => 'datetime',
             'password' => 'hashed',
         ];
     }

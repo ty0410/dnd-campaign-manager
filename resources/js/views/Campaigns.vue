@@ -1,315 +1,191 @@
 <template>
-    <main>
-        <h1>Mis campañas</h1>
-
-        <section>
-            <h2>Crear campaña</h2>
-
-            <form @submit.prevent="createCampaign">
-                <div>
-                    <label for="name">Nombre de la campaña</label>
-
-                    <input
-                        id="name"
-                        v-model="newCampaign.name"
-                        type="text"
-                        placeholder="Ej. La Mina Perdida de Phandelver"
-                        required
-                        maxlength="255"
-                    />
-                </div>
-
-                <div>
-                    <label for="description">Descripción</label>
-
-                    <textarea
-                        id="description"
-                        v-model="newCampaign.description"
-                        placeholder="Describe brevemente la aventura..."
-                        rows="4"
-                    ></textarea>
-                </div>
-
-                <button type="submit" :disabled="creating">
-                    {{ creating ? "Creando..." : "Crear campaña" }}
-                </button>
-            </form>
-
-            <p v-if="formMessage">
-                {{ formMessage }}
-            </p>
-        </section>
-
-        <hr />
-
-        <section>
-            <h2>Mis campañas</h2>
-
-            <p v-if="loading">Cargando campañas...</p>
-
-            <p v-if="error">
-                {{ error }}
-            </p>
-
-            <p v-if="!loading && !campaigns.length && !error">
-                No tienes campañas.
-            </p>
-
-            <article
-    v-for="campaign in campaigns"
-    :key="campaign.id"
->
-    <template v-if="editingCampaignId !== campaign.id">
-        <h3>{{ campaign.name }}</h3>
-
-        <p v-if="campaign.description">
-            {{ campaign.description }}
-        </p>
-
-        <p v-else>
-            Esta campaña no tiene descripción.
-        </p>
-
-        <div class="campaign-actions">
-            <RouterLink :to="`/campaigns/${campaign.id}`">
-                Ver campaña
-            </RouterLink>
-
-            <button type="button" @click="startEditing(campaign)">
-                Editar
+    <main class="campaigns-page">
+        <header class="page-header page-header--split">
+            <div>
+                <h1>Mis campañas</h1>
+            </div>
+            <button class="primary-button" type="button" @click="showCreate = true">
+                <AppIcon name="plus" /> Nueva campaña
             </button>
+        </header>
 
-            <button
-    type="button"
-    @click="deleteCampaign(campaign)"
->
-    Eliminar
-</button>
+        <div v-if="loading" class="skeleton-grid" aria-busy="true" aria-label="Cargando campañas">
+            <div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>
         </div>
-    </template>
+        <div v-else-if="error" class="error-message" role="alert">
+            {{ error }}
+            <button type="button" class="secondary-button" @click="loadCampaigns">Reintentar</button>
+        </div>
+        <template v-else-if="campaigns.length">
+            <div class="list-toolbar">
+                <div class="search-field">
+                    <AppIcon name="search" />
+                    <input v-model.trim="search" type="search" placeholder="Buscar por nombre, descripción o Dungeon Master..." aria-label="Buscar campañas">
+                </div>
+                <p class="list-count" aria-live="polite">{{ filteredCampaigns.length }} de {{ campaigns.length }}</p>
+            </div>
 
-    <form v-else @submit.prevent="updateCampaign">
-        <h3>Editar campaña</h3>
-
-        <div>
-            <label :for="`edit-name-${campaign.id}`">
-                Nombre
-            </label>
-
-            <input
-                :id="`edit-name-${campaign.id}`"
-                v-model="editForm.name"
-                type="text"
-                maxlength="255"
-                required
-            >
+            <div v-if="filteredCampaigns.length" class="campaign-grid stagger">
+            <article v-for="campaign in filteredCampaigns" :key="campaign.id" class="campaign-card"
+                :style="campaign.image_url ? { '--cover': `url('${campaign.image_url}')` } : {}">
+                <div class="campaign-card-content">
+                    <p v-if="campaign.master" class="campaign-kicker">Dirigida por {{ campaign.master.name }}</p>
+                    <h2>{{ campaign.name }}</h2>
+                    <p class="campaign-description">{{ campaign.description || 'Sin descripción todavía.' }}</p>
+                    <div class="campaign-card-actions">
+                        <RouterLink class="primary-button" :to="`/campaigns/${campaign.id}`">Abrir campaña</RouterLink>
+                        <RouterLink class="ghost-button" :to="`/campaigns/${campaign.id}/edit`">Editar</RouterLink>
+                        <button class="ghost-button danger-button" type="button" @click="deleteCampaign(campaign)">Eliminar</button>
+                    </div>
+                </div>
+            </article>
+            </div>
+            <div v-else class="empty-state">
+                <h2>Sin resultados</h2>
+                <p>Ninguna campaña coincide con «{{ search }}».</p>
+                <button class="secondary-button" type="button" @click="search = ''">Limpiar búsqueda</button>
+            </div>
+        </template>
+        <div v-else class="empty-state">
+            <div class="empty-icon" aria-hidden="true">✦</div>
+            <h2>Aún no tienes campañas</h2>
+            <p>Crea tu primera aventura y empieza a preparar tu mundo.</p>
+            <button class="primary-button" type="button" @click="showCreate = true">Crear primera campaña</button>
         </div>
 
-        <div>
-            <label :for="`edit-description-${campaign.id}`">
-                Descripción
-            </label>
-
-            <textarea
-                :id="`edit-description-${campaign.id}`"
-                v-model="editForm.description"
-                rows="4"
-            ></textarea>
-        </div>
-
-        <button type="submit" :disabled="savingEdit">
-            {{ savingEdit ? "Guardando..." : "Guardar cambios" }}
-        </button>
-
-        <button type="button" @click="cancelEditing">
-            Cancelar
-        </button>
-    </form>
-</article>
-        </section>
+        <Transition name="modal">
+            <div v-if="showCreate" class="modal-backdrop" @click.self="closeCreate">
+                <form class="modal" role="dialog" aria-modal="true" aria-labelledby="create-title" @submit.prevent="createCampaign">
+                    <button class="modal-close" type="button" aria-label="Cerrar" @click="closeCreate"><AppIcon name="x" /></button>
+                    <h2 id="create-title">Crear campaña</h2>
+                    <label for="campaign-name">Nombre</label>
+                    <input id="campaign-name" v-model.trim="newCampaign.name" maxlength="255" required placeholder="Ej. La Mina Perdida de Phandelver">
+                    <label for="campaign-description">Descripción</label>
+                    <textarea id="campaign-description" v-model="newCampaign.description" rows="4" placeholder="Describe brevemente la aventura..."></textarea>
+                    <label for="campaign-image">Imagen de portada (opcional)</label>
+                    <input id="campaign-image" type="file" accept="image/jpeg,image/png,image/webp" @change="onCoverSelected">
+                    <small>Se verá de fondo detrás del título de la campaña. JPG, PNG o WebP, máximo 2 MB.</small>
+                    <div v-if="coverPreview" class="cover-preview cover-preview--small" :style="{ backgroundImage: `linear-gradient(0deg,rgba(11,10,17,.8),rgba(11,10,17,.05)),url('${coverPreview}')` }">{{ newCampaign.name || 'Tu campaña' }}</div>
+                    <p v-if="formMessage" class="error-message" role="alert">{{ formMessage }}</p>
+                    <div class="modal-actions">
+                        <button class="secondary-button" type="button" @click="closeCreate">Cancelar</button>
+                        <button class="primary-button" type="submit" :disabled="creating">{{ creating ? 'Creando...' : 'Crear campaña' }}</button>
+                    </div>
+                </form>
+            </div>
+        </Transition>
     </main>
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
-import { RouterLink } from "vue-router";
-import api from "../services/api";
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { RouterLink } from 'vue-router';
+import api from '../services/api';
+import AppIcon from '../components/AppIcon.vue';
 
 const campaigns = ref([]);
 const loading = ref(true);
-const error = ref("");
+const error = ref('');
+const search = ref('');
 
-const creating = ref(false);
-const formMessage = ref("");
-
-const newCampaign = ref({
-    name: "",
-    description: "",
+// Búsqueda sin distinguir mayúsculas ni acentos.
+const normalize = (text) => String(text ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+const filteredCampaigns = computed(() => {
+    const term = normalize(search.value);
+    if (!term) return campaigns.value;
+    return campaigns.value.filter((campaign) => normalize(`${campaign.name} ${campaign.description} ${campaign.master?.name}`).includes(term));
 });
 
-const loadCampaigns = async () => {
+const showCreate = ref(false);
+const creating = ref(false);
+const formMessage = ref('');
+const newCampaign = ref({ name: '', description: '' });
+
+async function loadCampaigns() {
     loading.value = true;
-    error.value = "";
-
+    error.value = '';
     try {
-        const response = await api.get("/campaigns");
-
+        const response = await api.get('/campaigns');
         campaigns.value = response.data;
     } catch (err) {
-        if (err.response) {
-            error.value =
-                err.response.data.message ||
-                "No se pudieron cargar las campañas.";
-        } else {
-            error.value = "No se pudo conectar con el servidor.";
-        }
+        error.value = err.response?.data?.message || 'No se pudieron cargar las campañas.';
     } finally {
         loading.value = false;
     }
-};
+}
 
-const createCampaign = async () => {
+const coverFile = ref(null);
+const coverPreview = ref('');
+
+function onCoverSelected(event) {
+    const file = event.target.files?.[0] || null;
+    if (coverPreview.value) URL.revokeObjectURL(coverPreview.value);
+    coverFile.value = null;
+    coverPreview.value = '';
+
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+        formMessage.value = 'La imagen no puede superar los 2 MB.';
+        event.target.value = '';
+        return;
+    }
+
+    formMessage.value = '';
+    coverFile.value = file;
+    coverPreview.value = URL.createObjectURL(file);
+}
+
+function closeCreate() {
+    if (coverPreview.value) URL.revokeObjectURL(coverPreview.value);
+    coverFile.value = null;
+    coverPreview.value = '';
+    showCreate.value = false;
+    formMessage.value = '';
+    newCampaign.value = { name: '', description: '' };
+}
+
+async function createCampaign() {
     creating.value = true;
-    formMessage.value = "";
-    error.value = "";
-
+    formMessage.value = '';
     try {
-        const response = await api.post("/campaigns", {
+        const { data } = await api.post('/campaigns', {
             name: newCampaign.value.name,
             description: newCampaign.value.description || null,
         });
 
-        formMessage.value =
-            response.data.message || "Campaña creada correctamente.";
+        // La portada se sube una vez creada la campaña.
+        const created = data.campaign ?? data;
+        if (coverFile.value && created?.id) {
+            const upload = new FormData();
+            upload.append('image', coverFile.value);
+            try {
+                await api.post(`/campaigns/${created.id}/image`, upload, { headers: { 'Content-Type': undefined } });
+            } catch {
+                // La campaña ya existe: la portada se puede subir después desde «Editar».
+            }
+        }
 
-        newCampaign.value = {
-            name: "",
-            description: "",
-        };
-
+        closeCreate();
         await loadCampaigns();
     } catch (err) {
-        if (err.response?.data?.errors) {
-            formMessage.value = Object.values(err.response.data.errors)
-                .flat()
-                .join(" ");
-        } else if (err.response) {
-            formMessage.value =
-                err.response.data.message || "No se pudo crear la campaña.";
-        } else {
-            formMessage.value = "No se pudo conectar con el servidor.";
-        }
+        formMessage.value = err.response?.data?.message || Object.values(err.response?.data?.errors || {}).flat().join(' ') || 'No se pudo crear la campaña.';
     } finally {
         creating.value = false;
     }
-};
+}
 
-onMounted(() => {
-    loadCampaigns();
-});
-
-const editingCampaignId = ref(null);
-const savingEdit = ref(false);
-
-const editForm = ref({
-    name: "",
-    description: "",
-});
-
-const startEditing = (campaign) => {
-    editingCampaignId.value = campaign.id;
-
-    editForm.value = {
-        name: campaign.name,
-        description: campaign.description || "",
-    };
-
-    formMessage.value = "";
-    error.value = "";
-};
-
-const cancelEditing = () => {
-    editingCampaignId.value = null;
-
-    editForm.value = {
-        name: "",
-        description: "",
-    };
-};
-
-const updateCampaign = async () => {
-    if (editingCampaignId.value === null) {
-        return;
-    }
-
-    savingEdit.value = true;
-    formMessage.value = "";
-
-    try {
-        const response = await api.put(
-            `/campaigns/${editingCampaignId.value}`,
-            {
-                name: editForm.value.name,
-                description: editForm.value.description || null,
-            }
-        );
-
-        formMessage.value =
-            response.data.message || "Campaña actualizada correctamente.";
-
-        cancelEditing();
-        await loadCampaigns();
-    } catch (err) {
-        if (err.response?.data?.errors) {
-            formMessage.value = Object.values(
-                err.response.data.errors
-            )
-                .flat()
-                .join(" ");
-        } else if (err.response) {
-            formMessage.value =
-                err.response.data.message ||
-                "No se pudo actualizar la campaña.";
-        } else {
-            formMessage.value =
-                "No se pudo conectar con el servidor.";
-        }
-    } finally {
-        savingEdit.value = false;
-    }
-};
-
-const deleteCampaign = async (campaign) => {
-    const confirmed = window.confirm(
-        `¿Seguro que quieres eliminar la campaña "${campaign.name}"? Esta acción no se puede deshacer.`
-    );
-
-    if (!confirmed) {
-        return;
-    }
-
-    formMessage.value = "";
-    error.value = "";
-
+async function deleteCampaign(campaign) {
+    if (!window.confirm(`¿Seguro que quieres eliminar «${campaign.name}»? Esta acción no se puede deshacer.`)) return;
     try {
         await api.delete(`/campaigns/${campaign.id}`);
-
-        formMessage.value = "Campaña eliminada correctamente.";
-
-        if (editingCampaignId.value === campaign.id) {
-            cancelEditing();
-        }
-
         await loadCampaigns();
     } catch (err) {
-        if (err.response) {
-            formMessage.value =
-                err.response.data.message ||
-                "No se pudo eliminar la campaña.";
-        } else {
-            formMessage.value =
-                "No se pudo conectar con el servidor.";
-        }
+        error.value = err.response?.data?.message || 'No se pudo eliminar la campaña.';
     }
-};
+}
+
+function onKeydown(event) { if (event.key === 'Escape' && showCreate.value) closeCreate(); }
+
+onMounted(() => { window.addEventListener('keydown', onKeydown); loadCampaigns(); });
+onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
 </script>

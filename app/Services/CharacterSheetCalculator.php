@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Character;
+use App\Models\CharacterInventory;
 
 class CharacterSheetCalculator
 {
@@ -123,7 +124,7 @@ class CharacterSheetCalculator
         $bonus = $this->proficiencyBonus($character);
         foreach (self::ABILITIES as $ability => $definition) {
             $level = $this->proficiencyLevel($character, 'saving_throw', [
-                $ability, 'saving-throw-' . substr($ability, 0, 3), 'saving-throw-' . $ability,
+                $ability, substr($ability, 0, 3), 'saving-throw-' . substr($ability, 0, 3), 'saving-throw-' . $ability,
             ]);
             $modifier = $this->abilityModifier($character, $ability);
             $result[$ability] = [
@@ -135,9 +136,82 @@ class CharacterSheetCalculator
         return $result;
     }
 
+    /**
+     * Clase de armadura según las reglas de D&D 5.ª edición:
+     *  - Con armadura: base de la armadura + Destreza (limitada en armaduras medias, sin Destreza en pesadas).
+     *  - Sin armadura: 10 + Destreza. El bárbaro puede usar 10 + Des + Con y el monje 10 + Des + Sab.
+     *  - Escudo equipado: +2 (o lo que indique el objeto).
+     *  - Más el bonificador manual de la ficha.
+     */
+    public function armorClass(Character $character): array
+    {
+        $dex = $this->abilityModifier($character, 'dexterity') ?? 0;
+        $items = $character->inventory->where('is_equipped', true);
+
+        $hydrate = function ($item) {
+            if ($item->equipment_data === null && $item->equipment_index) {
+                try {
+                    $detail = app(DndApiService::class)->getEquipmentItem($item->equipment_index);
+                    if ($detail) {
+                        $item->equipment_data = CharacterInventory::dataFromCatalog($detail);
+                        $item->save();
+                    }
+                } catch (\Throwable $e) {
+                    // Sin conexión con el catálogo: se ignora este objeto por ahora.
+                }
+            }
+
+            return $item;
+        };
+
+        $armorOf = fn ($item) => $item->equipment_data['armor_category'] ?? null;
+        $items = $items->map($hydrate);
+
+        $body = $items->first(fn ($item) => in_array($armorOf($item), ['Light', 'Medium', 'Heavy'], true));
+        $shield = $items->first(fn ($item) => $armorOf($item) === 'Shield');
+
+        $classIndexes = $character->characterClasses->pluck('class_index')->all();
+
+        if ($body) {
+            $data = $body->equipment_data['armor_class'] ?? [];
+            $dexPart = ! empty($data['dex_bonus'])
+                ? (isset($data['max_bonus']) && $data['max_bonus'] !== null ? min($dex, (int) $data['max_bonus']) : $dex)
+                : 0;
+            $value = (int) ($data['base'] ?? 10) + $dexPart;
+            $label = $body->item_name;
+        } else {
+            $value = 10 + $dex;
+            $label = 'Base 10';
+
+            // Defensa sin armadura (no se aplica a la armadura equipada).
+            if (in_array('barbarian', $classIndexes, true)) {
+                $alt = 10 + $dex + ($this->abilityModifier($character, 'constitution') ?? 0);
+                if ($alt > $value) { $value = $alt; $label = 'Defensa sin armadura'; }
+            }
+            if (in_array('monk', $classIndexes, true) && ! $shield) {
+                $alt = 10 + $dex + ($this->abilityModifier($character, 'wisdom') ?? 0);
+                if ($alt > $value) { $value = $alt; $label = 'Defensa sin armadura'; }
+            }
+        }
+
+        if ($shield) {
+            $value += (int) ($shield->equipment_data['armor_class']['base'] ?? 2);
+        }
+
+        $bonus = (int) $character->ac_bonus;
+
+        return [
+            'value' => $value + $bonus,
+            'base_label' => $label,
+            'shield' => (bool) $shield,
+            'bonus' => $bonus,
+        ];
+    }
+
     public function summary(Character $character): array
     {
         return [
+            'armor_class' => $this->armorClass($character),
             'total_level' => $this->totalLevel($character),
             'proficiency_bonus' => $this->proficiencyBonus($character),
             'ability_scores' => $this->abilityScores($character),

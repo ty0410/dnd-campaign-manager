@@ -41,7 +41,7 @@ class NpcController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'race' => ['nullable', 'string', 'max:100'],
             'role' => ['nullable', 'string', 'max:100'],
-            'description' => ['nullable', 'string'],
+            'description' => ['nullable', 'string', 'max:3000'],
             'location' => ['nullable', 'string', 'max:255'],
         ]);
 
@@ -108,7 +108,7 @@ class NpcController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'race' => ['nullable', 'string', 'max:100'],
             'role' => ['nullable', 'string', 'max:100'],
-            'description' => ['nullable', 'string'],
+            'description' => ['nullable', 'string', 'max:3000'],
             'location' => ['nullable', 'string', 'max:255'],
         ]);
 

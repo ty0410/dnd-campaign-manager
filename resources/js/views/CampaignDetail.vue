@@ -1,774 +1,578 @@
 <template>
-    <main>
-        <p v-if="loading">Cargando campaña...</p>
-
-        <p v-if="error" class="error-message">
-            {{ error }}
-        </p>
+    <main class="campaign-dashboard">
+        <div v-if="loading && !campaign" aria-busy="true" aria-label="Cargando campaña">
+            <div class="skeleton skeleton-hero"></div>
+            <div class="skeleton-panels">
+                <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+            </div>
+        </div>
+        <p v-if="error" class="error-message" role="alert">{{ error }}</p>
+        <p v-if="flash" class="success-message" role="status">{{ flash }}</p>
 
         <template v-if="campaign">
-            <section class="campaign-header">
-                <h1>{{ campaign.name }}</h1>
-
-                <p v-if="campaign.description">
-                    {{ campaign.description }}
-                </p>
-                <p v-else>Esta campaña no tiene descripción.</p>
-
-                <p class="campaign-id">ID de campaña: {{ campaign.id }}</p>
-            </section>
-
-            <section class="campaign-section">
-                <h2>Personajes</h2>
-
-                <form class="character-form" @submit.prevent="createCharacter">
-                    <h3>Crear personaje</h3>
-
-                    <div>
-                        <label for="character-name">Nombre del personaje</label>
-                        <input
-                            id="character-name"
-                            v-model="newCharacter.name"
-                            type="text"
-                            maxlength="255"
-                            placeholder="Ej. Arthas"
-                            required
-                        />
+            <header class="campaign-hero" :style="campaign.image_url ? { '--cover': `url('${campaign.image_url}')` } : {}">
+                <div class="hero-copy">
+                    <RouterLink to="/campaigns" class="back-link"><AppIcon name="back" /> Mis campañas</RouterLink>
+                    <h1>{{ campaign.name }}</h1>
+                    <p class="hero-description">{{ campaign.description || 'Esta campaña todavía no tiene descripción.' }}</p>
+                    <div v-if="campaign.master" class="hero-meta">
+                        <span class="hero-chip"><AppIcon name="crown" /> Dungeon Master: {{ campaign.master.name }}</span>
                     </div>
+                </div>
+                <div v-if="isMaster" class="hero-actions">
+                    <button class="ghost-button" :class="{ 'is-active': editMode }" type="button" :aria-pressed="editMode" @click="editMode = !editMode"><AppIcon name="edit" /> {{ editMode ? 'Listo' : 'Editar campaña' }}</button>
+                    <Transition name="tools">
+                        <div v-if="editMode" class="hero-edit-tools">
+                            <button class="ghost-button" type="button" @click="showInfo = true">Datos y portada</button>
+                            <button class="ghost-button danger-button" type="button" @click="deleteCampaign"><AppIcon name="trash" /> Eliminar</button>
+                        </div>
+                    </Transition>
+                </div>
+            </header>
 
-                    <div>
-                        <label for="character-race">Raza</label>
-                        <select
-                            id="character-race"
-                            v-model="newCharacter.race_index"
-                            @change="onRaceChange"
-                            required
-                        >
-                            <option value="">Selecciona una raza</option>
-                            <option
-                                v-for="race in races"
-                                :key="race.index"
-                                :value="race.index"
-                            >
-                                {{ race.name }}
-                            </option>
-                        </select>
-                    </div>
+            <div class="campaign-layout">
+                <div class="campaign-panels stagger">
+                    <section class="panel">
+                        <header class="panel-heading">
+                            <div><h2>Sesiones</h2></div>
+                            <div class="panel-heading-tools">
+                                <button class="add-button" type="button" aria-label="Añadir sesión" @click="openAdd('session')"><AppIcon name="plus" /></button>
+                                <Transition name="tools">
+                                <div v-if="editMode && selectedFor('session')" class="panel-edit-tools">
+                                    <button type="button" class="add-button" aria-label="Editar la sesión seleccionada" title="Editar" @click="openEdit('session', selectedFor('session').item)"><AppIcon name="edit" /></button>
+                                    <button type="button" class="add-button add-button--danger" aria-label="Eliminar el elemento seleccionado" title="Eliminar" @click="deleteItem('session', selectedFor('session').item)"><AppIcon name="trash" /></button>
+                                </div>
+                            </Transition>
+                            </div>
+                        </header>
+                        <div v-if="sessions.length" class="item-list">
+                            <article v-for="session in sessions" :key="session.id" class="dashboard-item selectable" :class="{ 'is-selected': isSelected('session', session.id) }" role="button" tabindex="0" :aria-pressed="isSelected('session', session.id)" @click="select('session', session.id)" @keydown.enter.prevent="select('session', session.id)" @keydown.space.prevent="select('session', session.id)">
+                                <div class="item-symbol"><AppIcon name="clock" /></div>
+                                <div class="item-copy">
+                                    <h3>{{ session.title }}</h3>
+                                    <p v-if="session.session_date" class="item-meta">{{ formatDate(session.session_date) }}</p>
+                                    <p v-if="session.summary" class="item-excerpt">{{ session.summary }}</p>
+                                </div>
+                            </article>
+                        </div>
+                        <p v-else class="empty-hint">Todavía no hay sesiones. Añade la primera con el botón +.</p>
+                    </section>
 
-                    <div>
-                        <label for="character-subrace">Subraza</label>
-                        <select
-                            id="character-subrace"
-                            v-model="newCharacter.subrace_index"
-                            :disabled="
-                                !newCharacter.race_index || loadingSubraces
-                            "
-                        >
-                            <option value="">Sin subraza</option>
-                            <option
-                                v-for="subrace in availableSubraces"
-                                :key="subrace.index"
-                                :value="subrace.index"
-                            >
-                                {{ subrace.name }}
-                            </option>
-                        </select>
-                    </div>
+                    <section class="panel">
+                        <header class="panel-heading">
+                            <div><h2>Lugares</h2></div>
+                            <div class="panel-heading-tools">
+                                <button class="add-button" type="button" aria-label="Añadir lugar" @click="openAdd('location')"><AppIcon name="plus" /></button>
+                                <Transition name="tools">
+                                <div v-if="editMode && selectedFor('location')" class="panel-edit-tools">
+                                    <button type="button" class="add-button" aria-label="Editar el lugar seleccionado" title="Editar" @click="openEdit('location', selectedFor('location').item)"><AppIcon name="edit" /></button>
+                                    <button type="button" class="add-button add-button--danger" aria-label="Eliminar el elemento seleccionado" title="Eliminar" @click="deleteItem('location', selectedFor('location').item)"><AppIcon name="trash" /></button>
+                                </div>
+                            </Transition>
+                            </div>
+                        </header>
+                        <div v-if="locations.length" class="item-list">
+                            <article v-for="location in locations" :key="location.id" class="dashboard-item selectable" :class="{ 'is-selected': isSelected('location', location.id) }" role="button" tabindex="0" :aria-pressed="isSelected('location', location.id)" @click="select('location', location.id)" @keydown.enter.prevent="select('location', location.id)" @keydown.space.prevent="select('location', location.id)">
+                                <div class="item-symbol"><AppIcon name="pin" /></div>
+                                <div class="item-copy">
+                                    <h3>{{ location.name }}</h3>
+                                    <p v-if="location.type" class="item-meta">{{ location.type }}</p>
+                                    <p v-if="location.description" class="item-excerpt">{{ location.description }}</p>
+                                </div>
+                            </article>
+                        </div>
+                        <p v-else class="empty-hint">Todavía no hay lugares registrados.</p>
+                    </section>
 
-                    <div>
-                        <label for="character-background">Trasfondo</label>
-                        <select
-                            id="character-background"
-                            v-model="newCharacter.background_index"
-                        >
-                            <option value="">Selecciona un trasfondo</option>
-                            <option
-                                v-for="background in backgrounds"
-                                :key="background.index"
-                                :value="background.index"
-                            >
-                                {{ background.name }}
-                            </option>
-                        </select>
-                    </div>
+                    <section class="panel">
+                        <header class="panel-heading">
+                            <div><h2>Personajes no jugadores</h2></div>
+                            <div class="panel-heading-tools">
+                                <button class="add-button" type="button" aria-label="Añadir PNJ" @click="openAdd('npc')"><AppIcon name="plus" /></button>
+                                <Transition name="tools">
+                                <div v-if="editMode && selectedFor('npc')" class="panel-edit-tools">
+                                    <button type="button" class="add-button" aria-label="Editar el PNJ seleccionado" title="Editar" @click="openEdit('npc', selectedFor('npc').item)"><AppIcon name="edit" /></button>
+                                    <button type="button" class="add-button add-button--danger" aria-label="Eliminar el elemento seleccionado" title="Eliminar" @click="deleteItem('npc', selectedFor('npc').item)"><AppIcon name="trash" /></button>
+                                </div>
+                            </Transition>
+                            </div>
+                        </header>
+                        <div v-if="npcs.length" class="item-list">
+                            <article v-for="npc in npcs" :key="npc.id" class="dashboard-item selectable" :class="{ 'is-selected': isSelected('npc', npc.id) }" role="button" tabindex="0" :aria-pressed="isSelected('npc', npc.id)" @click="select('npc', npc.id)" @keydown.enter.prevent="select('npc', npc.id)" @keydown.space.prevent="select('npc', npc.id)">
+                                <div class="item-symbol" :class="{ 'item-symbol--photo': npc.image_url }"><img v-if="npc.image_url" :src="npc.image_url" :alt="`Retrato de ${npc.name}`" loading="lazy"><AppIcon v-else name="npc" /></div>
+                                <div class="item-copy">
+                                    <h3>{{ npc.name }}</h3>
+                                    <p v-if="npc.race || npc.role" class="item-meta">{{ [npc.race, npc.role].filter(Boolean).join(' · ') }}</p>
+                                    <p v-if="npc.description" class="item-excerpt">{{ npc.description }}</p>
+                                </div>
+                            </article>
+                        </div>
+                        <p v-else class="empty-hint">Todavía no hay PNJ en esta campaña.</p>
+                    </section>
 
-                    <div class="form-group">
-                        <label for="personality_trait">
-                            Rasgo de personalidad
-                        </label>
-                        <textarea
-                            id="personality_trait"
-                            v-model="newCharacter.personality_trait"
-                            rows="2"
-                            placeholder="¿Cómo se comporta tu personaje?"
-                        ></textarea>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="ideal">Ideal</label>
-                        <textarea
-                            id="ideal"
-                            v-model="newCharacter.ideal"
-                            rows="2"
-                            placeholder="¿Qué principio guía a tu personaje?"
-                        ></textarea>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="bond">Vínculo</label>
-                        <textarea
-                            id="bond"
-                            v-model="newCharacter.bond"
-                            rows="2"
-                            placeholder="¿Qué persona, lugar u objeto es importante?"
-                        ></textarea>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="flaw">Defecto</label>
-                        <textarea
-                            id="flaw"
-                            v-model="newCharacter.flaw"
-                            rows="2"
-                            placeholder="¿Qué debilidad tiene tu personaje?"
-                        ></textarea>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="notes">Notas adicionales</label>
-                        <textarea
-                            id="notes"
-                            v-model="newCharacter.notes"
-                            rows="4"
-                            placeholder="Añade información adicional sobre tu personaje..."
-                        ></textarea>
-                    </div>
-
-                    <div>
-                        <label for="character-level">Nivel</label>
-                        <input
-                            id="character-level"
-                            v-model.number="newCharacter.level"
-                            type="number"
-                            min="1"
-                            max="20"
-                            required
-                        />
-                    </div>
-
-                    <div class="ability-score-section">
-                        <h4>Características</h4>
-
-                        <label for="ability-score-method">
-                            Método de asignación
-                        </label>
-
-                        <select
-                            id="ability-score-method"
-                            v-model="newCharacter.ability_score_method"
-                        >
-                            <option value="manual">Asignación manual</option>
-                            <option value="standard_array">
-                                Array estándar
-                            </option>
-                            <option value="point_buy">Compra de puntos</option>
-                        </select>
-
-                        <p
-                            v-if="
-                                newCharacter.ability_score_method === 'manual'
-                            "
-                        >
-                            Introduce cada puntuación entre 1 y 20.
-                        </p>
-
-                        <p
-                            v-else-if="
-                                newCharacter.ability_score_method ===
-                                'standard_array'
-                            "
-                        >
-                            Puedes modificar las seis puntuaciones entre 1 y
-                            20. Los valores iniciales son 15, 14, 13, 12, 10 y
-                            8.
-                        </p>
-
-                        <template
-                            v-else-if="
-                                newCharacter.ability_score_method ===
-                                'point_buy'
-                            "
-                        >
-                            <p>
-                                Asigna puntuaciones entre 1 y 15. Los valores
-                                entre 1 y 8 cuestan 0 puntos. El máximo es de
-                                27 puntos.
-                            </p>
-
-                            <p>
-                                Puntos utilizados:
-                                <strong>
-                                    {{
-                                        pointBuyTotal === null
-                                            ? "—"
-                                            : pointBuyTotal
-                                    }}
-                                    / 27
-                                </strong>
-                            </p>
-
-                            <p
-                                v-if="
-                                    pointBuyTotal !== null &&
-                                    pointBuyTotal > 27
-                                "
-                                class="error-message"
-                            >
-                                Has superado el límite de puntos.
-                            </p>
-                        </template>
-
-                        <div class="ability-score-grid">
-                            <div
-                                v-for="ability in abilities"
-                                :key="ability.key"
-                                class="ability-score-card"
-                            >
-                                <label :for="`score-${ability.key}`">
-                                    {{ ability.label }}
-                                </label>
-
-                                <input
-                                    :id="`score-${ability.key}`"
-                                    v-model.number="newCharacter[ability.key]"
-                                    type="number"
-                                    :min="1"
-                                    :max="
-                                        newCharacter.ability_score_method ===
-                                        'point_buy'
-                                            ? 15
-                                            : 20
-                                    "
-                                    required
-                                />
-
-                                <label :for="`bonus-${ability.key}`">
-                                    Bono personalizado
-                                </label>
-
-                                <input
-                                    :id="`bonus-${ability.key}`"
-                                    v-model.number="
-                                        newCharacter[ability.bonus]
-                                    "
-                                    type="number"
-                                    min="-5"
-                                    max="5"
-                                    required
-                                />
-
-                                <p>
-                                    Puntuación efectiva:
-                                    {{
-                                        newCharacter[ability.key] === null ||
-                                        newCharacter[ability.key] === ""
-                                            ? "—"
-                                            : Number(
-                                                  newCharacter[ability.key],
-                                              ) +
-                                              Number(
-                                                  newCharacter[ability.bonus] ||
-                                                      0,
-                                              )
-                                    }}
-                                </p>
-
-                                <p>
-                                    Modificador:
-                                    {{
-                                        abilityModifier(
-                                            newCharacter[ability.key],
-                                            newCharacter[ability.bonus],
-                                        )
-                                    }}
-                                </p>
+                    <section class="panel">
+                        <header class="panel-heading">
+                            <div><h2>Personajes</h2></div>
+                            <div class="panel-heading-tools">
+                                <button class="add-button" type="button" aria-label="Añadir personaje existente" @click="openCharacterModal"><AppIcon name="plus" /></button>
+                                <Transition name="tools">
+                                    <div v-if="editMode && selectedFor('character')" class="panel-edit-tools">
+                                        <RouterLink v-if="isMine(selectedFor('character').item)" class="add-button" :to="`/characters/${selectedFor('character').item.id}`" aria-label="Abrir la ficha del personaje seleccionado" title="Abrir ficha"><AppIcon name="edit" /></RouterLink>
+                                        <button v-if="canRemove(selectedFor('character').item)" type="button" class="add-button add-button--danger" aria-label="Retirar el personaje seleccionado" title="Retirar de la campaña" @click="removeCharacter(selectedFor('character').item)"><AppIcon name="trash" /></button>
+                                    </div>
+                                </Transition>
+                            </div>
+                        </header>
+                        <div v-if="characters.length" class="character-list">
+                            <div v-for="character in characters" :key="character.id" class="character-row" :class="{ 'is-selected': isSelected('character', character.id) }">
+                                <div class="character-link selectable" role="button" tabindex="0" :aria-pressed="isSelected('character', character.id)" @click="select('character', character.id)" @keydown.enter.prevent="select('character', character.id)" @keydown.space.prevent="select('character', character.id)">
+                                    <span class="character-avatar">
+                                        <img v-if="character.image_url" :src="character.image_url" :alt="`Retrato de ${character.name}`" loading="lazy">
+                                        <template v-else>{{ initial(character.name) }}</template>
+                                    </span>
+                                    <span class="character-info">
+                                        <strong>{{ character.name }}</strong>
+                                        <small>
+                                            {{ character.race || 'Sin raza' }} · Nivel {{ character.level }}
+                                            <span v-if="ownerLabel(character)" class="owner-chip" :class="{ 'owner-chip--mine': isMine(character) }">{{ ownerLabel(character) }}</span>
+                                        </small>
+                                    </span>
+                                </div>
                             </div>
                         </div>
+                        <p v-else class="empty-hint">Todavía no hay personajes asignados a esta campaña.</p>
+                        <RouterLink class="create-character-link" :to="{ name: 'character-create', query: { campaign_id: campaign.id } }">Crear un personaje nuevo <AppIcon name="external" /></RouterLink>
+                    </section>
+
+                    <section v-if="isMaster" class="panel panel-wide recruit-panel">
+                        <header class="panel-heading">
+                            <div><h2>Código y solicitudes</h2></div>
+                        </header>
+                        <div class="recruit-grid">
+                            <div class="invite-box">
+                                <p class="invite-label">Código de la campaña</p>
+                                <div class="invite-code-row">
+                                    <code class="invite-code">{{ campaign.invite_code || '—' }}</code>
+                                    <button class="secondary-button" type="button" :disabled="!campaign.invite_code" @click="copyCode">{{ copied ? 'Copiado' : 'Copiar' }}</button>
+                                </div>
+                                <p class="invite-help">Compártelo con tus jugadores: lo usan en «Mis personajes → Unirse a campaña». Tú apruebas cada solicitud.</p>
+                                <button class="danger-button" type="button" @click="renewCode">Generar código nuevo</button>
+                            </div>
+                            <div class="pending-box">
+                                <p class="invite-label">Solicitudes pendientes</p>
+                                <ul v-if="pendingRequests.length" class="request-list">
+                                    <li v-for="entry in pendingRequests" :key="entry.id" class="request-row">
+                                        <div class="request-copy">
+                                            <template v-if="entry.direction === 'player_request'">
+                                                <strong>{{ entry.requester?.name || 'Un jugador' }} quiere añadir a «{{ entry.character?.name }}»</strong>
+                                                <small>Nivel {{ entry.character?.level }} · Esperando tu aprobación.</small>
+                                            </template>
+                                            <template v-else>
+                                                <strong>Invitación a «{{ entry.character?.name }}»</strong>
+                                                <small>Esperando que {{ entry.character?.user?.name || 'su dueño' }} la acepte.</small>
+                                            </template>
+                                        </div>
+                                        <div class="request-actions">
+                                            <template v-if="entry.direction === 'player_request'">
+                                                <button class="primary-button" type="button" :disabled="busyRequest === entry.id" @click="answerRequest(entry, 'approve')">Aprobar</button>
+                                                <button class="secondary-button" type="button" :disabled="busyRequest === entry.id" @click="answerRequest(entry, 'reject')">Rechazar</button>
+                                            </template>
+                                            <button v-else class="danger-button" type="button" :disabled="busyRequest === entry.id" @click="cancelInvitation(entry)">Retirar</button>
+                                        </div>
+                                    </li>
+                                </ul>
+                                <p v-else class="empty-hint">No hay solicitudes pendientes.</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="panel panel-wide">
+                        <header class="panel-heading">
+                            <div><h2>Encuentros de combate</h2></div>
+                            <div class="panel-heading-tools">
+                                <button class="add-button" type="button" aria-label="Crear encuentro de combate" @click="showWizard = true"><AppIcon name="plus" /></button>
+                                <Transition name="tools">
+                                <div v-if="editMode && selectedFor('encounter')" class="panel-edit-tools">
+                                    <button type="button" class="add-button" aria-label="Editar el encuentro seleccionado" title="Editar" @click="openEdit('encounter', selectedFor('encounter').item)"><AppIcon name="edit" /></button>
+                                    <button type="button" class="add-button add-button--danger" aria-label="Eliminar el elemento seleccionado" title="Eliminar" @click="deleteItem('encounter', selectedFor('encounter').item)"><AppIcon name="trash" /></button>
+                                </div>
+                            </Transition>
+                            </div>
+                        </header>
+                        <div v-if="encounters.length" class="encounter-grid">
+                            <article v-for="encounter in encounters" :key="encounter.id" class="encounter-card selectable" :class="{ 'is-selected': isSelected('encounter', encounter.id) }" role="button" tabindex="0" :aria-pressed="isSelected('encounter', encounter.id)" @click="select('encounter', encounter.id)" @keydown.enter.prevent="select('encounter', encounter.id)" @keydown.space.prevent="select('encounter', encounter.id)">
+                                <header>
+                                    <span class="encounter-title"><AppIcon name="swords" /><h3>{{ encounter.name }}</h3></span>
+                                    <span class="status-badge" :class="`status-badge--${encounter.status || 'planned'}`">{{ encounterStatus(encounter.status) }}</span>
+                                </header>
+                                <p class="item-excerpt">{{ encounter.description || 'Sin descripción.' }}</p>
+                                <footer>{{ combatantsLabel(encounter) }}</footer>
+                            </article>
+                        </div>
+                        <p v-else class="empty-hint">Todavía no hay encuentros de combate preparados.</p>
+                    </section>
+                </div>
+
+                <!-- Espacio de la derecha: aquí se colocan las hojas con el detalle -->
+                <aside class="sheet-slot" aria-live="polite">
+                    <div v-if="sheetEntries.length" class="sheet-backdrop" @click="closeAllSheets"></div>
+                    <template v-if="sheetEntries.length">
+                        <div v-if="sheetEntries.length > 1" class="sheet-toolbar">
+                            <span>{{ sheetEntries.length }} hojas abiertas</span>
+                            <button class="secondary-button" type="button" @click="closeAllSheets">Cerrar todas</button>
+                        </div>
+                        <TransitionGroup name="sheet" tag="div" class="sheet-stack" :data-count="sheetEntries.length > 1 ? 'many' : 'one'">
+                            <CampaignSheet v-for="entry in sheetEntries" :key="entry.key" :type="entry.type" :item="entry.item" :collapsed="collapsedKeys.includes(entry.key)" :campaign-characters="characters" :campaign-id="route.params.id" @close="closeSheet(entry.type, entry.item.id)" @toggle="toggleCollapse(entry.key)" @changed="loadCampaign" />
+                        </TransitionGroup>
+                    </template>
+                    <div v-else class="sheet-placeholder">
+                        <AppIcon name="search" />
+                        <p>Pulsa una sesión, un lugar, un PNJ, un personaje o un encuentro para leer aquí su detalle. Puedes tener abiertas hasta dos hojas por categoría.</p>
                     </div>
-
-                    <div>
-                        <label for="character-description">Descripción</label>
-                        <textarea
-                            id="character-description"
-                            v-model="newCharacter.description"
-                            rows="3"
-                            placeholder="Historia, personalidad y trasfondo..."
-                        ></textarea>
-                    </div>
-
-                    <button type="submit" :disabled="creatingCharacter">
-                        {{
-                            creatingCharacter
-                                ? "Creando..."
-                                : "Crear personaje"
-                        }}
-                    </button>
-
-                    <p v-if="characterMessage" aria-live="polite">
-                        {{ characterMessage }}
-                    </p>
-                </form>
-
-                <div v-if="characters.length" class="item-grid">
-                    <article
-                        v-for="character in characters"
-                        :key="character.id"
-                        class="campaign-item"
-                    >
-                        <h3>{{ character.name }}</h3>
-                        <p v-if="character.race">Raza: {{ character.race }}</p>
-                        <p>Nivel: {{ character.level }}</p>
-                        <p v-if="character.description">
-                            {{ character.description }}
-                        </p>
-                    </article>
-                </div>
-
-                <p v-else class="empty-message">
-                    Todavía no hay personajes en esta campaña.
-                </p>
-            </section>
-
-            <section class="campaign-section">
-                <h2>NPCs</h2>
-
-                <div v-if="npcs.length" class="item-grid">
-                    <article
-                        v-for="npc in npcs"
-                        :key="npc.id"
-                        class="campaign-item"
-                    >
-                        <h3>{{ npc.name }}</h3>
-                        <p v-if="npc.role">Papel: {{ npc.role }}</p>
-                        <p v-if="npc.race">Raza: {{ npc.race }}</p>
-                        <p v-if="npc.description">{{ npc.description }}</p>
-                    </article>
-                </div>
-
-                <p v-else class="empty-message">
-                    Todavía no hay NPCs en esta campaña.
-                </p>
-            </section>
-
-            <section class="campaign-section">
-                <h2>Lugares</h2>
-
-                <div v-if="locations.length" class="item-grid">
-                    <article
-                        v-for="location in locations"
-                        :key="location.id"
-                        class="campaign-item"
-                    >
-                        <h3>{{ location.name }}</h3>
-                        <p v-if="location.type">Tipo: {{ location.type }}</p>
-                        <p v-if="location.description">
-                            {{ location.description }}
-                        </p>
-                    </article>
-                </div>
-
-                <p v-else class="empty-message">
-                    Todavía no hay lugares en esta campaña.
-                </p>
-            </section>
-
-            <section class="campaign-section">
-                <h2>Sesiones</h2>
-
-                <div v-if="sessions.length" class="item-grid">
-                    <article
-                        v-for="session in sessions"
-                        :key="session.id"
-                        class="campaign-item"
-                    >
-                        <h3>{{ session.title }}</h3>
-
-                        <p v-if="session.session_date">
-                            Fecha: {{ formatDate(session.session_date) }}
-                        </p>
-
-                        <p v-if="session.summary">{{ session.summary }}</p>
-                    </article>
-                </div>
-
-                <p v-else class="empty-message">
-                    Todavía no hay sesiones en esta campaña.
-                </p>
-            </section>
+                </aside>
+            </div>
         </template>
 
-        <RouterLink class="back-link" to="/campaigns">
-            Volver a mis campañas
-        </RouterLink>
+        <Transition name="modal">
+            <CampaignItemModal v-if="itemModal" :key="`${itemModal.type}-${itemModal.item?.id || 'new'}`" :type="itemModal.type" :item="itemModal.item || null" :campaign-id="route.params.id" @close="itemModal = null" @saved="onItemSaved" />
+        </Transition>
+
+        <Transition name="modal">
+            <CampaignInfoModal v-if="showInfo && campaign" :campaign="campaign" @close="showInfo = false" @saved="onInfoSaved" />
+        </Transition>
+
+        <Transition name="modal">
+            <EncounterWizard v-if="showWizard" :campaign-id="route.params.id" :campaign-characters="characters" @close="showWizard = false" @saved="onWizardSaved" />
+        </Transition>
+
+        <Transition name="modal">
+            <div v-if="characterModal" class="modal-backdrop" @click.self="closeCharacterModal">
+                <section class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="character-modal-title">
+                    <button class="modal-close" type="button" aria-label="Cerrar" @click="closeCharacterModal"><AppIcon name="x" /></button>
+                    <h2 id="character-modal-title">Añadir personaje</h2>
+                    <p class="modal-lead">{{ isMaster ? 'Tus personajes entran directamente. Los de otros jugadores reciben una invitación y solo entran si su dueño la acepta. Elige a un participante o busca a otro jugador por su correo exacto.' : 'Tu solicitud la aprobará el Dungeon Master antes de que el personaje entre en la campaña.' }}</p>
+
+                    <div v-if="isMaster" class="player-picker">
+                        <div class="player-tabs">
+                            <button type="button" class="chip-button" :class="{ 'is-active': !viewedPlayer || viewedPlayer.is_me }" @click="loadAvailableCharacters()">Mis personajes</button>
+                            <button v-for="player in participants" :key="player.id" type="button" class="chip-button" :class="{ 'is-active': viewedPlayer?.id === player.id }" @click="loadAvailableCharacters({ user_id: player.id })">{{ player.name }}</button>
+                        </div>
+                        <form class="player-lookup" @submit.prevent="lookupPlayer">
+                            <input v-model.trim="playerEmail" type="email" placeholder="Correo exacto de otro jugador" aria-label="Correo del jugador">
+                            <button class="secondary-button" type="submit" :disabled="!playerEmail || loadingCharacters"><AppIcon name="search" /> Buscar</button>
+                        </form>
+                    </div>
+
+                    <p v-if="viewedPlayer && !viewedPlayer.is_me" class="viewing-label">Personajes de <strong>{{ viewedPlayer.name }}</strong></p>
+                    <p v-if="loadingCharacters" class="empty-hint">Buscando personajes...</p>
+                    <p v-else-if="availableCharacters.length === 0" class="empty-hint">{{ viewedPlayer && !viewedPlayer.is_me ? 'Este jugador no tiene personajes disponibles.' : 'No tienes personajes disponibles para añadir. Puedes crear uno nuevo.' }}</p>
+                    <div v-else class="available-characters">
+                        <button v-for="character in availableCharacters" :key="character.id" type="button" class="available-character" :disabled="assigningCharacter === character.id" @click="assignCharacter(character)">
+                            <span class="character-info">
+                                <strong>{{ character.name }}</strong>
+                                <small>
+                                    {{ character.race || 'Sin raza' }} · Nivel {{ character.level }}
+                                    <span class="owner-chip" :class="{ 'owner-chip--mine': character.is_mine }">{{ character.is_mine ? 'Tuyo' : `de ${viewedPlayer?.name || 'otro jugador'}` }}</span>
+                                </small>
+                            </span>
+                            <span class="action-label">{{ actionLabel(character) }}</span>
+                        </button>
+                    </div>
+                    <p v-if="modalError" class="error-message" role="alert">{{ modalError }}</p>
+                    <RouterLink class="secondary-button create-new-character" :to="{ name: 'character-create', query: { campaign_id: campaign.id } }">Crear personaje nuevo</RouterLink>
+                </section>
+            </div>
+        </Transition>
     </main>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
-import { useRoute, RouterLink } from "vue-router";
-import api from "../services/api";
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { RouterLink, useRoute, useRouter } from 'vue-router';
+import api from '../services/api';
+import { getCurrentUser } from '../services/auth';
+import AppIcon from '../components/AppIcon.vue';
+import CampaignSheet from '../components/CampaignSheet.vue';
+import CampaignItemModal from '../components/CampaignItemModal.vue';
+import EncounterWizard from '../components/EncounterWizard.vue';
+import CampaignInfoModal from '../components/CampaignInfoModal.vue';
+import { ENCOUNTER_STATUSES, ITEM_TYPES, formatDate } from '../services/campaignItems';
 
 const route = useRoute();
-
+const router = useRouter();
 const campaign = ref(null);
+const currentUser = ref(null);
 const loading = ref(true);
-const error = ref("");
-
+const error = ref('');
 const characters = ref([]);
 const npcs = ref([]);
 const locations = ref([]);
 const sessions = ref([]);
+const encounters = ref([]);
 
-const creatingCharacter = ref(false);
-const characterMessage = ref("");
+const itemModal = ref(null); // { type, item? }
+const showWizard = ref(false);
+const showInfo = ref(false);
+const editMode = ref(route.query.edit === '1');
+const flash = ref('');
+const pendingRequests = ref([]);
+const busyRequest = ref(null);
+const copied = ref(false);
+const openSheets = ref([]); // {type, id}, de la más antigua a la más reciente
+const collapsedKeys = ref([]);
 
-const newCharacter = ref({
-    name: "",
-    race: "",
-    race_index: "",
-    subrace_index: "",
-    background_index: "",
-    background: "",
-    level: 1,
-    description: "",
-    personality_trait: "",
-    ideal: "",
-    bond: "",
-    flaw: "",
-    notes: "",
-    ability_score_method: "manual",
+const characterModal = ref(false);
+const modalError = ref('');
+const availableCharacters = ref([]);
+const loadingCharacters = ref(false);
+const viewedPlayer = ref(null);
+const participants = ref([]);
+const playerEmail = ref('');
+const assigningCharacter = ref(null);
+const removingCharacter = ref(null);
 
-    strength: null,
-    dexterity: null,
-    constitution: null,
-    intelligence: null,
-    wisdom: null,
-    charisma: null,
+const isMaster = computed(() => !!currentUser.value && !!campaign.value && Number(campaign.value.master_id) === Number(currentUser.value.id));
 
-    strength_bonus: 0,
-    dexterity_bonus: 0,
-    constitution_bonus: 0,
-    intelligence_bonus: 0,
-    wisdom_bonus: 0,
-    charisma_bonus: 0,
-});
-
-const races = ref([]);
-const backgrounds = ref([]);
-const availableSubraces = ref([]);
-const loadingSubraces = ref(false);
-
-const abilities = [
-    { key: "strength", bonus: "strength_bonus", label: "Fuerza" },
-    { key: "dexterity", bonus: "dexterity_bonus", label: "Destreza" },
-    {
-        key: "constitution",
-        bonus: "constitution_bonus",
-        label: "Constitución",
-    },
-    {
-        key: "intelligence",
-        bonus: "intelligence_bonus",
-        label: "Inteligencia",
-    },
-    { key: "wisdom", bonus: "wisdom_bonus", label: "Sabiduría" },
-    { key: "charisma", bonus: "charisma_bonus", label: "Carisma" },
-];
-
-// Costes de compra de puntos.
-// Las puntuaciones entre 1 y 8 no consumen puntos.
-const pointCosts = {
-    1: 0,
-    2: 0,
-    3: 0,
-    4: 0,
-    5: 0,
-    6: 0,
-    7: 0,
-    8: 0,
-    9: 1,
-    10: 2,
-    11: 3,
-    12: 4,
-    13: 5,
-    14: 7,
-    15: 9,
-};
-
-const pointBuyTotal = computed(() => {
-    if (newCharacter.value.ability_score_method !== "point_buy") {
-        return null;
-    }
-
-    let total = 0;
-
-    for (const ability of abilities) {
-        const score = newCharacter.value[ability.key];
-
-        // Si aún no se ha introducido una puntuación, no se suma.
-        if (score === null || score === "" || score === undefined) {
-            continue;
-        }
-
-        const numericScore = Number(score);
-
-        // No calcular el coste de valores inválidos.
-        if (
-            !Number.isInteger(numericScore) ||
-            numericScore < 1 ||
-            numericScore > 15
-        ) {
-            return null;
-        }
-
-        total += pointCosts[numericScore];
-    }
-
-    return total;
-});
-
-const abilityModifier = (score, bonus) => {
-    if (score === null || score === "" || score === undefined) {
-        return "—";
-    }
-
-    const effectiveScore = Number(score) + Number(bonus || 0);
-    const modifier = Math.floor((effectiveScore - 10) / 2);
-
-    return modifier >= 0 ? `+${modifier}` : String(modifier);
-};
-
-const loadCharacterCatalogs = async () => {
+async function loadCampaign() {
+    loading.value = true; error.value = '';
+    const id = route.params.id;
     try {
-        const [racesResponse, backgroundsResponse] = await Promise.all([
-            api.get("/dnd/races"),
-            api.get("/dnd/backgrounds"),
+        const [campaignRes, charsRes, npcsRes, locationsRes, sessionsRes, encountersRes] = await Promise.all([
+            api.get(`/campaigns/${id}`), api.get(`/campaigns/${id}/characters`), api.get(`/campaigns/${id}/npcs`),
+            api.get(`/campaigns/${id}/locations`), api.get(`/campaigns/${id}/sessions`), api.get(`/campaigns/${id}/encounters`),
         ]);
-
-        races.value = racesResponse.data.results ?? racesResponse.data;
-        backgrounds.value =
-            backgroundsResponse.data.results ?? backgroundsResponse.data;
+        campaign.value = campaignRes.data;
+        characters.value = charsRes.data;
+        npcs.value = npcsRes.data;
+        locations.value = locationsRes.data;
+        sessions.value = sessionsRes.data;
+        encounters.value = encountersRes.data;
+        if (isMaster.value) await loadRequests();
     } catch (err) {
-        characterMessage.value =
-            "No se pudieron cargar las razas o los trasfondos.";
+        error.value = err.response?.data?.message || 'No se pudo cargar la campaña.';
+    } finally { loading.value = false; }
+}
+
+async function loadCurrentUser() {
+    try { currentUser.value = await getCurrentUser(); } catch { /* el interceptor y el guard de rutas gestionan la sesión */ }
+}
+
+// Hoja de detalle ----------------------------------------------------
+const collections = { session: sessions, location: locations, npc: npcs, character: characters, encounter: encounters };
+
+const MAX_SHEETS_PER_TYPE = 2;
+const keyOf = (type, id) => `${type}-${id}`;
+
+// Se calcula a partir de las listas: si se recargan, las hojas se actualizan solas.
+// La más reciente va arriba.
+const sheetEntries = computed(() => [...openSheets.value].reverse()
+    .map((entry) => {
+        const item = collections[entry.type].value.find((candidate) => candidate.id === entry.id);
+        return item ? { key: keyOf(entry.type, entry.id), type: entry.type, item } : null;
+    })
+    .filter(Boolean));
+
+const isSelected = (type, id) => openSheets.value.some((entry) => entry.type === type && entry.id === id);
+
+// Abre una hoja (o la cierra si ya estaba abierta). Cada categoría admite dos
+// a la vez: al abrir una tercera se retira la más antigua de esa categoría.
+function select(type, id) {
+    if (isSelected(type, id)) { closeSheet(type, id); return; }
+
+    const sameType = openSheets.value.filter((entry) => entry.type === type);
+    let next = openSheets.value;
+    if (sameType.length >= MAX_SHEETS_PER_TYPE) {
+        const oldest = sameType[0];
+        next = next.filter((entry) => entry !== oldest);
+        collapsedKeys.value = collapsedKeys.value.filter((key) => key !== keyOf(oldest.type, oldest.id));
     }
-};
+    openSheets.value = [...next, { type, id }];
+}
 
-const onRaceChange = async () => {
-    newCharacter.value.subrace_index = "";
-    availableSubraces.value = [];
+function closeSheet(type, id) {
+    openSheets.value = openSheets.value.filter((entry) => !(entry.type === type && entry.id === id));
+    collapsedKeys.value = collapsedKeys.value.filter((key) => key !== keyOf(type, id));
+}
 
-    const raceIndex = newCharacter.value.race_index;
+function closeAllSheets() { openSheets.value = []; collapsedKeys.value = []; }
 
-    if (!raceIndex) {
-        newCharacter.value.race = "";
-        return;
-    }
+function toggleCollapse(key) {
+    collapsedKeys.value = collapsedKeys.value.includes(key)
+        ? collapsedKeys.value.filter((candidate) => candidate !== key)
+        : [...collapsedKeys.value, key];
+}
 
-    const selectedRace = races.value.find(
-        (race) => race.index === raceIndex,
-    );
+// Alta de elementos ----------------------------------------------------
+function openAdd(type) { itemModal.value = { type }; }
+function openEdit(type, item) { itemModal.value = { type, item }; }
 
-    newCharacter.value.race = selectedRace?.name ?? "";
-
-    loadingSubraces.value = true;
-
+async function deleteItem(type, item) {
+    const config = ITEM_TYPES[type];
+    const name = item[config.nameKey];
+    if (!window.confirm(`¿Eliminar «${name}»? Esta acción no se puede deshacer.`)) return;
+    error.value = '';
     try {
-        const response = await api.get(`/dnd/races/${raceIndex}`);
-        availableSubraces.value = response.data.subraces ?? [];
-    } catch (err) {
-        characterMessage.value = "No se pudieron cargar las subrazas.";
-    } finally {
-        loadingSubraces.value = false;
-    }
-};
+        await api.delete(`/${config.endpoint}/${item.id}`);
+        closeSheet(type, item.id);
+        await loadCampaign();
+    } catch (err) { error.value = err.response?.data?.message || 'No se pudo eliminar.'; }
+}
 
-const loadCampaign = async () => {
-    loading.value = true;
-    error.value = "";
+// Elemento seleccionado de cada panel: la hoja más reciente de ese tipo.
+const selectedFor = (type) => sheetEntries.value.find((entry) => entry.type === type) ?? null;
 
+async function onInfoSaved(options = {}) {
+    if (!options.keepOpen) showInfo.value = false;
+    await loadCampaign();
+}
+
+async function deleteCampaign() {
+    if (!window.confirm(`¿Eliminar la campaña «${campaign.value.name}» con todo su contenido? No se puede deshacer.`)) return;
     try {
-        const campaignId = route.params.id;
+        await api.delete(`/campaigns/${campaign.value.id}`);
+        await router.replace('/campaigns');
+    } catch (err) { error.value = err.response?.data?.message || 'No se pudo eliminar la campaña.'; }
+}
 
-        const response = await api.get(`/campaigns/${campaignId}`);
-        campaign.value = response.data;
+async function onWizardSaved() {
+    showWizard.value = false;
+    await loadCampaign();
+}
 
-        const [
-            charactersResponse,
-            npcsResponse,
-            locationsResponse,
-            sessionsResponse,
-        ] = await Promise.all([
-            api.get(`/campaigns/${campaignId}/characters`),
-            api.get(`/campaigns/${campaignId}/npcs`),
-            api.get(`/campaigns/${campaignId}/locations`),
-            api.get(`/campaigns/${campaignId}/sessions`),
-        ]);
+async function onItemSaved() {
+    itemModal.value = null;
+    await loadCampaign();
+}
 
-        characters.value = charactersResponse.data;
-        npcs.value = npcsResponse.data;
-        locations.value = locationsResponse.data;
-        sessions.value = sessionsResponse.data;
-    } catch (err) {
-        if (err.response) {
-            error.value =
-                err.response.data.message || "No se pudo cargar la campaña.";
-        } else {
-            error.value = "No se pudo conectar con el servidor.";
-        }
-    } finally {
-        loading.value = false;
-    }
-};
+// Personajes -------------------------------------------------------------
+function openCharacterModal() {
+    characterModal.value = true; modalError.value = ''; playerEmail.value = '';
+    viewedPlayer.value = null; availableCharacters.value = [];
+    loadAvailableCharacters();
+}
+function closeCharacterModal() { characterModal.value = false; modalError.value = ''; }
 
-const createCharacter = async () => {
-    creatingCharacter.value = true;
-    characterMessage.value = "";
-
+// Sin parámetros: tus personajes. Con user_id o email (solo Dungeon Master): los de un jugador.
+async function loadAvailableCharacters(params = {}) {
+    loadingCharacters.value = true; modalError.value = '';
     try {
-        const response = await api.post(
-            `/campaigns/${route.params.id}/characters`,
-            {
-                name: newCharacter.value.name,
-
-                // Raza, subraza y trasfondo.
-                race: newCharacter.value.race || null,
-                race_index: newCharacter.value.race_index || null,
-                subrace_index: newCharacter.value.subrace_index || null,
-                background_index:
-                    newCharacter.value.background_index || null,
-
-                level: newCharacter.value.level,
-                description: newCharacter.value.description || null,
-
-                // Rasgos de personalidad, ideales, vínculos y defectos.
-                personality_trait:
-                    newCharacter.value.personality_trait || null,
-                ideal: newCharacter.value.ideal || null,
-                bond: newCharacter.value.bond || null,
-                flaw: newCharacter.value.flaw || null,
-                notes: newCharacter.value.notes || null,
-
-                // Método de asignación de características.
-                ability_score_method:
-                    newCharacter.value.ability_score_method,
-
-                // Características base.
-                strength: newCharacter.value.strength,
-                dexterity: newCharacter.value.dexterity,
-                constitution: newCharacter.value.constitution,
-                intelligence: newCharacter.value.intelligence,
-                wisdom: newCharacter.value.wisdom,
-                charisma: newCharacter.value.charisma,
-
-                // Bonificaciones personalizadas.
-                strength_bonus: newCharacter.value.strength_bonus,
-                dexterity_bonus: newCharacter.value.dexterity_bonus,
-                constitution_bonus: newCharacter.value.constitution_bonus,
-                intelligence_bonus: newCharacter.value.intelligence_bonus,
-                wisdom_bonus: newCharacter.value.wisdom_bonus,
-                charisma_bonus: newCharacter.value.charisma_bonus,
-            },
-        );
-
-        characterMessage.value =
-            response.data.message || "Personaje creado correctamente.";
-
-        // Reiniciar el formulario.
-        newCharacter.value = {
-            name: "",
-            race: "",
-            race_index: "",
-            subrace_index: "",
-            background_index: "",
-            background: "",
-            level: 1,
-            description: "",
-            personality_trait: "",
-            ideal: "",
-            bond: "",
-            flaw: "",
-            notes: "",
-            ability_score_method: "manual",
-
-            strength: null,
-            dexterity: null,
-            constitution: null,
-            intelligence: null,
-            wisdom: null,
-            charisma: null,
-
-            strength_bonus: 0,
-            dexterity_bonus: 0,
-            constitution_bonus: 0,
-            intelligence_bonus: 0,
-            wisdom_bonus: 0,
-            charisma_bonus: 0,
-        };
-
-        availableSubraces.value = [];
-        loadingSubraces.value = false;
-
-        const charactersResponse = await api.get(
-            `/campaigns/${route.params.id}/characters`,
-        );
-
-        characters.value = charactersResponse.data;
+        const response = await api.get(`/campaigns/${route.params.id}/available-characters`, { params });
+        availableCharacters.value = response.data.characters;
+        participants.value = response.data.participants || [];
+        viewedPlayer.value = response.data.player;
     } catch (err) {
-        if (err.response?.data?.errors) {
-            characterMessage.value = Object.values(err.response.data.errors)
-                .flat()
-                .join(" ");
-        } else if (err.response) {
-            characterMessage.value =
-                err.response.data.message || "No se pudo crear el personaje.";
-        } else {
-            characterMessage.value = "No se pudo conectar con el servidor.";
-        }
-    } finally {
-        creatingCharacter.value = false;
+        modalError.value = err.response?.data?.message || 'No se pudieron cargar los personajes.';
+    } finally { loadingCharacters.value = false; }
+}
+
+function lookupPlayer() {
+    if (playerEmail.value) loadAvailableCharacters({ email: playerEmail.value });
+}
+
+function actionLabel(character) {
+    if (!isMaster.value) return 'Solicitar';
+    return character.is_mine ? 'Añadir' : 'Invitar';
+}
+
+async function assignCharacter(character) {
+    assigningCharacter.value = character.id; modalError.value = '';
+    try {
+        const { data } = await api.post(`/campaigns/${route.params.id}/characters/${character.id}`);
+        flashMessage(data.message);
+        await loadCampaign(); closeCharacterModal();
+    } catch (err) { modalError.value = err.response?.data?.message || 'No se pudo añadir el personaje.'; }
+    finally { assigningCharacter.value = null; }
+}
+
+let flashTimer = null;
+function flashMessage(text) {
+    flash.value = text;
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => { flash.value = ''; }, 7000);
+}
+
+// Reclutamiento (solo Dungeon Master) -------------------------------
+async function loadRequests() {
+    try {
+        const { data } = await api.get(`/campaigns/${route.params.id}/requests`);
+        pendingRequests.value = data;
+    } catch { /* no bloquea el resto del panel */ }
+}
+
+async function answerRequest(entry, action) {
+    busyRequest.value = entry.id; error.value = '';
+    try {
+        const { data } = await api.post(`/campaign-requests/${entry.id}/${action}`);
+        flashMessage(data.message);
+        await loadCampaign();
+    } catch (err) { error.value = err.response?.data?.message || 'No se pudo responder a la solicitud.'; }
+    finally { busyRequest.value = null; }
+}
+
+async function cancelInvitation(entry) {
+    busyRequest.value = entry.id; error.value = '';
+    try {
+        const { data } = await api.delete(`/campaign-requests/${entry.id}`);
+        flashMessage(data.message);
+        await loadRequests();
+    } catch (err) { error.value = err.response?.data?.message || 'No se pudo retirar la invitación.'; }
+    finally { busyRequest.value = null; }
+}
+
+async function copyCode() {
+    try {
+        await navigator.clipboard.writeText(campaign.value.invite_code);
+        copied.value = true;
+        setTimeout(() => { copied.value = false; }, 1800);
+    } catch { flashMessage('No se pudo copiar. Selecciona el código y cópialo a mano.'); }
+}
+
+async function renewCode() {
+    if (!window.confirm('¿Generar un código nuevo? El anterior dejará de funcionar.')) return;
+    try {
+        const { data } = await api.post(`/campaigns/${route.params.id}/invite-code`);
+        campaign.value = { ...campaign.value, invite_code: data.invite_code };
+        flashMessage(data.message);
+    } catch (err) { error.value = err.response?.data?.message || 'No se pudo renovar el código.'; }
+}
+
+async function removeCharacter(character) {
+    if (!window.confirm(`¿Retirar a «${character.name}» de la campaña? La ficha se conserva.`)) return;
+    removingCharacter.value = character.id; error.value = '';
+    try {
+        await api.delete(`/campaigns/${route.params.id}/characters/${character.id}`);
+        await loadCampaign();
+    } catch (err) { error.value = err.response?.data?.message || 'No se pudo retirar el personaje.'; }
+    finally { removingCharacter.value = null; }
+}
+
+const isMine = (character) => !!currentUser.value && Number(character.user_id) === Number(currentUser.value.id);
+const canRemove = (character) => isMaster.value || isMine(character);
+function ownerLabel(character) {
+    if (isMine(character)) return 'Tuyo';
+    return character.user?.name ? `de ${character.user.name}` : '';
+}
+const initial = (name) => name?.slice(0, 1)?.toUpperCase() || '?';
+
+const encounterStatus = (status) => ENCOUNTER_STATUSES[status] || ENCOUNTER_STATUSES.planned;
+function combatantsLabel(encounter) {
+    const total = encounter.combatants?.length || 0;
+    return total === 0 ? 'Sin combatientes' : `${total} ${total === 1 ? 'combatiente' : 'combatientes'}`;
+}
+
+function onKeydown(event) {
+    if (event.key !== 'Escape') return;
+    if (characterModal.value) closeCharacterModal();
+    else if (!itemModal.value && !showWizard.value && !showInfo.value && sheetEntries.value.length) {
+        const newest = sheetEntries.value[0];
+        closeSheet(newest.type, newest.item.id);
     }
-};
+}
 
-const formatDate = (date) => {
-    if (!date) {
-        return "";
-    }
-
-    // Evitar que la zona horaria cambie el día de la fecha.
-    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(date);
-
-    if (!match) {
-        return date;
-    }
-
-    const [, year, month, day] = match;
-
-    const formattedDate = new Date(
-        Number(year),
-        Number(month) - 1,
-        Number(day),
-    );
-
-    return new Intl.DateTimeFormat("es-ES", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-    }).format(formattedDate);
-};
-
-onMounted(() => {
+onMounted(async () => {
+    window.addEventListener('keydown', onKeydown);
+    await loadCurrentUser(); // hace falta para saber si eres el Dungeon Master
     loadCampaign();
-    loadCharacterCatalogs();
 });
+onBeforeUnmount(() => { window.removeEventListener('keydown', onKeydown); clearTimeout(flashTimer); });
 </script>

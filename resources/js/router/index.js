@@ -1,6 +1,6 @@
 
 import { createRouter, createWebHistory } from 'vue-router';
-import { getToken } from '../services/auth';
+import { getCachedUser, getToken, isAdminUser } from '../services/auth';
 
 import Home from '../views/Home.vue';
 import Login from '../views/Login.vue';
@@ -12,6 +12,11 @@ import TestCharacterApi from '../views/TestCharacterApi.vue';
 import Characters from '../views/Characters.vue';
 import CharacterCreate from '../views/CharacterCreate.vue';
 import CharacterDetail from '../views/CharacterDetail.vue';
+import AdminPanel from '../views/AdminPanel.vue';
+import CampaignItemPage from '../views/CampaignItemPage.vue';
+import Profile from '../views/Profile.vue';
+import UserProfile from '../views/UserProfile.vue';
+import Friends from '../views/Friends.vue';
 import OtherCampaigns from '../views/OtherCampaigns.vue';
 import DndApi2014 from '../views/DndApi2014.vue';
 
@@ -72,6 +77,10 @@ const router = createRouter({
             meta: { requiresAuth: true },
         },
         {
+            path: '/campaigns/:id/edit',
+            redirect: (to) => ({ path: `/campaigns/${to.params.id}`, query: { edit: '1' } }),
+        },
+        {
             path: '/other-campaigns',
             name: 'other-campaigns',
             component: OtherCampaigns,
@@ -84,6 +93,36 @@ const router = createRouter({
             meta: { requiresAuth: true },
         },
         {
+            path: '/campaigns/:id/:type(sessions|locations|npcs|encounters)/:itemId',
+            name: 'campaign-item',
+            component: CampaignItemPage,
+            meta: { requiresAuth: true },
+        },
+        {
+            path: '/profile',
+            name: 'profile',
+            component: Profile,
+            meta: { requiresAuth: true },
+        },
+        {
+            path: '/users/:username',
+            name: 'user-profile',
+            component: UserProfile,
+            meta: { requiresAuth: true },
+        },
+        {
+            path: '/friends',
+            name: 'friends',
+            component: Friends,
+            meta: { requiresAuth: true },
+        },
+        {
+            path: '/admin',
+            name: 'admin',
+            component: AdminPanel,
+            meta: { requiresAuth: true, requiresAdmin: true },
+        },
+        {
             path: '/test-character-api',
             name: 'test-character-api',
             component: TestCharacterApi,
@@ -92,7 +131,7 @@ const router = createRouter({
     ],
 });
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
     const authenticated = !!getToken();
 
     if (to.name === 'home' && authenticated) {
@@ -107,6 +146,11 @@ router.beforeEach((to) => {
     }
 
     if (to.meta.guestOnly && authenticated) {
+        return { name: 'dashboard' };
+    }
+
+    // Zona exclusiva de administradores (el servidor lo vuelve a comprobar).
+    if (to.meta.requiresAdmin && !isAdminUser(await getCachedUser())) {
         return { name: 'dashboard' };
     }
 });

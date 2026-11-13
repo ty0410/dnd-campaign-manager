@@ -42,8 +42,8 @@ class GameSessionController extends Controller
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'session_date' => ['nullable', 'date'],
-            'summary' => ['nullable', 'string'],
-            'notes' => ['nullable', 'string'],
+            'summary' => ['nullable', 'string', 'max:3000'],
+            'notes' => ['nullable', 'string', 'max:3000'],
         ]);
 
         $session = $campaign->gameSessions()->create([
@@ -110,8 +110,8 @@ class GameSessionController extends Controller
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'session_date' => ['nullable', 'date'],
-            'summary' => ['nullable', 'string'],
-            'notes' => ['nullable', 'string'],
+            'summary' => ['nullable', 'string', 'max:3000'],
+            'notes' => ['nullable', 'string', 'max:3000'],
         ]);
 
         $session->update([

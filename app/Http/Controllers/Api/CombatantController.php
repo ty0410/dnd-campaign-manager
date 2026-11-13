@@ -83,7 +83,9 @@ class CombatantController extends Controller
         if (!empty($validated['character_id'])) {
 
             $character = Character::where('id', $validated['character_id'])
-                ->where('campaign_id', $encounter->campaign_id)
+                ->whereHas('campaigns', function ($q) use ($encounter) {
+                    $q->where('campaigns.id', $encounter->campaign_id);
+                })
                 ->first();
 
             if (!$character) {
@@ -93,17 +95,8 @@ class CombatantController extends Controller
             }
         }
 
-        /*
-         * Un participante debe ser un personaje o un monstruo.
-         */
-        if (
-            empty($validated['character_id']) &&
-            empty($validated['monster_index'])
-        ) {
-            return response()->json([
-                'message' => 'Debes indicar un personaje o un monstruo.',
-            ], 422);
-        }
+        // Un participante puede ser un personaje, un monstruo del catálogo
+        // o una criatura personalizada (solo con nombre).
 
         $combatant = $encounter->combatants()->create([
             'character_id' => $validated['character_id'] ?? null,
@@ -194,7 +187,9 @@ class CombatantController extends Controller
         if (!empty($validated['character_id'])) {
 
             $character = Character::where('id', $validated['character_id'])
-                ->where('campaign_id', $combatant->encounter->campaign_id)
+                ->whereHas('campaigns', function ($q) use ($combatant) {
+                    $q->where('campaigns.id', $combatant->encounter->campaign_id);
+                })
                 ->first();
 
             if (!$character) {
@@ -204,17 +199,8 @@ class CombatantController extends Controller
             }
         }
 
-        /*
-         * Un participante debe ser un personaje o un monstruo.
-         */
-        if (
-            empty($validated['character_id']) &&
-            empty($validated['monster_index'])
-        ) {
-            return response()->json([
-                'message' => 'Debes indicar un personaje o un monstruo.',
-            ], 422);
-        }
+        // Un participante puede ser un personaje, un monstruo del catálogo
+        // o una criatura personalizada (solo con nombre).
 
         $combatant->update([
             'character_id' => $validated['character_id'] ?? null,

@@ -1,7 +1,7 @@
 <template>
     <div class="level-wizard-backdrop" role="presentation" @click.self="$emit('close')">
         <section class="level-wizard" role="dialog" aria-modal="true" aria-labelledby="level-wizard-title">
-            <header class="level-wizard-header"><div><p class="sheet-eyebrow">PROGRESIÓN DEL PERSONAJE</p><h2 id="level-wizard-title">Subir de nivel: {{ characterClass.class }}</h2><p>Nivel {{ options?.current_class_level || characterClass.level }} → {{ options?.next_class_level || Number(characterClass.level) + 1 }}</p></div><button type="button" class="level-wizard-close" aria-label="Cerrar" @click="$emit('close')">×</button></header>
+            <header class="level-wizard-header"><div><h2 id="level-wizard-title">Subir de nivel: {{ characterClass.class }}</h2><p>Nivel {{ options?.current_class_level || characterClass.level }} → {{ options?.next_class_level || Number(characterClass.level) + 1 }}</p></div><button type="button" class="level-wizard-close" aria-label="Cerrar" @click="$emit('close')">×</button></header>
             <nav class="level-wizard-steps" aria-label="Pasos de subida de nivel"><button v-for="(label, index) in stepLabels" :key="label" type="button" :class="{ active: step === index, done: step > index }" @click="step = index" :disabled="saving || !options || index > highestStep">{{ index + 1 }}. {{ label }}</button></nav>
             <p v-if="loading" class="sheet-state">Consultando la progresión de este nivel...</p><p v-else-if="error" class="error-message" role="alert">{{ error }}</p>
             <template v-else>

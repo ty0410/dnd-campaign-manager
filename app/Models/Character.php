@@ -20,6 +20,7 @@ class Character extends Model
         'proficiency_bonus',
         'description',
         'image_path',
+        'ac_bonus',
 
 
         // Raza y trasfondo
@@ -142,6 +143,11 @@ class Character extends Model
     /**
      * Objetos del inventario.
      */
+    public function attacks(): HasMany
+    {
+        return $this->hasMany(CharacterAttack::class)->orderBy('sort_order')->orderBy('id');
+    }
+
     public function inventory(): HasMany
     {
         return $this->hasMany(CharacterInventory::class);

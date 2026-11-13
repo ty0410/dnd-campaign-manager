@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\CampaignCharacterRequest;
 use App\Models\Character;
 use App\Models\CharacterProficiency;
+use App\Models\User;
 use App\Services\AbilityScoreValidator;
 use App\Services\CharacterSheetCalculator;
 use App\Services\DndApiService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -260,7 +263,19 @@ class CharacterController extends Controller
                 'ability_score_method' => $validated['ability_score_method'] ?? null,
             ]);
 
-            $character->campaigns()->attach($campaign->id);
+            if ((int) $campaign->master_id === (int) $request->user()->id) {
+                $character->campaigns()->attach($campaign->id);
+            } else {
+                // Un jugador no incorpora personajes por su cuenta: lo aprueba el DM.
+                CampaignCharacterRequest::create([
+                    'campaign_id' => $campaign->id,
+                    'character_id' => $character->id,
+                    'requested_by' => $request->user()->id,
+                    'direction' => CampaignCharacterRequest::PLAYER_REQUEST,
+                    'status' => CampaignCharacterRequest::PENDING,
+                ]);
+            }
+
             $this->persistInitialClassData($character, $validated);
             $this->persistCatalogProficiencies($character, $validated);
 
@@ -278,17 +293,19 @@ class CharacterController extends Controller
     }
 
     /**
-     * Asigna un personaje existente a una campaña.
-     * Solo el propietario puede realizar la asignación.
+     * Lista los personajes que se pueden añadir a una campaña.
+     *
+     * Nunca se devuelve un catálogo general. Por defecto solo salen los
+     * personajes propios. El Dungeon Master puede además consultar los de
+     * UN jugador concreto:
+     *  - ?user_id=...  jugador que ya participa en la campaña.
+     *  - ?email=...    jugador cualquiera, buscado por su correo exacto.
      */
-    public function assignCharacter(
-        Request $request,
-        $campaignId,
-        $characterId
-    ) {
-        $campaign = $request->user()
-            ->campaigns()
-            ->find($campaignId);
+    public function availableForCampaign(Request $request, $campaignId)
+    {
+        $user = $request->user();
+
+        $campaign = $user->campaigns()->find($campaignId);
 
         if (! $campaign) {
             return response()->json([
@@ -296,12 +313,136 @@ class CharacterController extends Controller
             ], 404);
         }
 
-        $character = Character::where('user_id', $request->user()->id)
-            ->find($characterId);
+        $isMaster = (int) $campaign->master_id === (int) $user->id;
+        $owner = $user;
 
-        if (! $character) {
+        if ($request->filled('email') || $request->filled('user_id')) {
+            if (! $isMaster) {
+                return response()->json([
+                    'message' => 'Solo el Dungeon Master puede añadir personajes de otros jugadores.',
+                ], 403);
+            }
+
+            if ($request->filled('email')) {
+                $email = mb_strtolower(trim((string) $request->query('email')));
+
+                $owner = User::whereRaw('LOWER(email) = ?', [$email])->first();
+
+                if (! $owner) {
+                    return response()->json([
+                        'message' => 'No hay ningún jugador con ese correo.',
+                    ], 404);
+                }
+
+                // Autoriza durante un rato añadir personajes de este jugador.
+                Cache::put($this->lookupCacheKey($campaign->id, $user->id, $owner->id), true, now()->addMinutes(30));
+            } else {
+                $owner = $campaign->users()
+                    ->where('users.id', (int) $request->query('user_id'))
+                    ->first();
+
+                if (! $owner) {
+                    return response()->json([
+                        'message' => 'Ese jugador no participa en la campaña.',
+                    ], 404);
+                }
+            }
+        }
+
+        $characters = Character::query()
+            ->where('user_id', $owner->id)
+            ->whereDoesntHave('campaigns', function ($q) use ($campaign) {
+                $q->where('campaigns.id', $campaign->id);
+            })
+            ->orderBy('name')
+            ->limit(30)
+            ->get()
+            ->map(function ($character) use ($user) {
+                return [
+                    'id' => $character->id,
+                    'name' => $character->name,
+                    'race' => $character->race,
+                    'level' => $character->level,
+                    'user_id' => $character->user_id,
+                    'image_url' => $character->image_url,
+                    'is_mine' => (int) $character->user_id === (int) $user->id,
+                ];
+            })
+            ->values();
+
+        // Jugadores que ya participan (atajo para el Dungeon Master).
+        $participants = $isMaster
+            ? $campaign->users()
+                ->where('users.id', '!=', $user->id)
+                ->orderBy('users.name')
+                ->get(['users.id', 'users.name'])
+            : [];
+
+        return response()->json([
+            'player' => [
+                'id' => $owner->id,
+                'name' => $owner->name,
+                'is_me' => (int) $owner->id === (int) $user->id,
+            ],
+            'characters' => $characters,
+            'participants' => $participants,
+        ]);
+    }
+
+    private function lookupCacheKey($campaignId, $masterId, $ownerId): string
+    {
+        return "campaign:{$campaignId}:lookup:{$masterId}:{$ownerId}";
+    }
+
+    /**
+     * El Dungeon Master solo puede añadir personajes de un jugador que
+     * participa en la campaña o al que acaba de buscar por su correo.
+     */
+    private function masterMayAddFrom($campaign, $user, $ownerId): bool
+    {
+        if ((int) $ownerId === (int) $user->id) {
+            return true;
+        }
+
+        if ($campaign->users()->where('users.id', $ownerId)->exists()) {
+            return true;
+        }
+
+        return Cache::has($this->lookupCacheKey($campaign->id, $user->id, $ownerId));
+    }
+
+    /**
+     * Asigna un personaje existente a una campaña.
+     * El Dungeon Master puede asignar personajes de cualquier usuario;
+     * el resto de participantes solo los suyos. El propietario del
+     * personaje pasa a ser participante de la campaña.
+     */
+    public function assignCharacter(
+        Request $request,
+        $campaignId,
+        $characterId
+    ) {
+        $user = $request->user();
+
+        $campaign = $user->campaigns()->find($campaignId);
+
+        if (! $campaign) {
             return response()->json([
-                'message' => 'Personaje no encontrado o no eres su propietario.',
+                'message' => 'Campaña no encontrada o no tienes acceso a ella.',
+            ], 404);
+        }
+
+        $isMaster = (int) $campaign->master_id === (int) $user->id;
+
+        $character = Character::find($characterId);
+
+        if (
+            ! $character
+            || (! $isMaster && (int) $character->user_id !== (int) $user->id)
+            || ($isMaster && ! $this->masterMayAddFrom($campaign, $user, $character->user_id))
+        ) {
+            return response()->json([
+                'message' => 'Personaje no encontrado o no tienes permiso para añadirlo.',
             ], 404);
         }
 
@@ -311,29 +452,63 @@ class CharacterController extends Controller
             ], 422);
         }
 
-        $character->campaigns()->attach($campaign->id);
+        $isOwn = (int) $character->user_id === (int) $user->id;
+
+        // El Dungeon Master con un personaje suyo: no hay otra parte que aprobar.
+        if ($isMaster && $isOwn) {
+            CampaignCharacterRequest::attachToCampaign($campaign, $character);
+
+            return response()->json([
+                'status' => 'attached',
+                'message' => 'Personaje añadido a la campaña.',
+            ]);
+        }
+
+        $alreadyPending = CampaignCharacterRequest::where('campaign_id', $campaign->id)
+            ->where('character_id', $character->id)
+            ->where('status', CampaignCharacterRequest::PENDING)
+            ->exists();
+
+        if ($alreadyPending) {
+            return response()->json([
+                'message' => 'Ya hay una solicitud pendiente para este personaje.',
+            ], 422);
+        }
+
+        // Un participante pide añadir un personaje suyo (lo aprueba el DM) o el DM
+        // invita al personaje de otro jugador (lo aprueba su dueño).
+        $direction = $isMaster
+            ? CampaignCharacterRequest::DM_INVITATION
+            : CampaignCharacterRequest::PLAYER_REQUEST;
+
+        CampaignCharacterRequest::create([
+            'campaign_id' => $campaign->id,
+            'character_id' => $character->id,
+            'requested_by' => $user->id,
+            'direction' => $direction,
+            'status' => CampaignCharacterRequest::PENDING,
+        ]);
 
         return response()->json([
-            'message' => 'Personaje asignado correctamente a la campaña.',
-            'character' => $character->fresh()->load([
-                'user',
-                'characterClasses',
-                'campaigns',
-            ]),
-        ]);
+            'status' => 'pending',
+            'message' => $isMaster
+                ? 'Invitación enviada. Su dueño debe aceptarla para que el personaje entre en la campaña.'
+                : 'Solicitud enviada. El Dungeon Master debe aprobarla.',
+        ], 201);
     }
 
     /**
-     * Quita un personaje de una campaña sin borrar la ficha.
+     * Retira un personaje de una campaña (la ficha se conserva).
+     * Pueden hacerlo el propietario del personaje y el Dungeon Master.
      */
     public function removeCharacterFromCampaign(
         Request $request,
         $campaignId,
         $characterId
     ) {
-        $campaign = $request->user()
-            ->campaigns()
-            ->find($campaignId);
+        $user = $request->user();
+
+        $campaign = $user->campaigns()->find($campaignId);
 
         if (! $campaign) {
             return response()->json([
@@ -341,12 +516,16 @@ class CharacterController extends Controller
             ], 404);
         }
 
-        $character = Character::where('user_id', $request->user()->id)
-            ->find($characterId);
+        $isMaster = (int) $campaign->master_id === (int) $user->id;
 
-        if (! $character) {
+        $character = Character::find($characterId);
+
+        if (
+            ! $character
+            || (! $isMaster && (int) $character->user_id !== (int) $user->id)
+        ) {
             return response()->json([
-                'message' => 'Personaje no encontrado o no eres su propietario.',
+                'message' => 'Personaje no encontrado o no tienes permiso para retirarlo.',
             ], 404);
         }
 
@@ -363,6 +542,20 @@ class CharacterController extends Controller
             if ((int) $character->campaign_id === (int) $campaign->id) {
                 $character->campaign_id = null;
                 $character->save();
+            }
+
+            // Si su dueño no tiene más personajes en la campaña y no es
+            // el Dungeon Master, deja de figurar como participante.
+            $ownerId = (int) $character->user_id;
+
+            if ($ownerId && $ownerId !== (int) $campaign->master_id) {
+                $ownerHasMore = $campaign->characters()
+                    ->where('characters.user_id', $ownerId)
+                    ->exists();
+
+                if (! $ownerHasMore) {
+                    $campaign->users()->detach($ownerId);
+                }
             }
         });
 
@@ -389,6 +582,7 @@ class CharacterController extends Controller
             'proficiencies',
             'proficiencyOverrides',
             'inventory',
+            'attacks',
             'currency',
             'spells',
             'spellSlots',
@@ -400,7 +594,11 @@ class CharacterController extends Controller
             ], 404);
         }
 
-        if (! $this->hasCharacterAccess($request, $character)) {
+        // Los administradores pueden consultar las fichas de los usuarios normales.
+        $adminCanView = $request->user()->isAdmin()
+            && $character->user?->role === User::ROLE_USER;
+
+        if (! $adminCanView && ! $this->hasCharacterAccess($request, $character)) {
             return response()->json([
                 'message' => 'No tienes acceso a este personaje.',
             ], 404);
@@ -516,6 +714,67 @@ class CharacterController extends Controller
         }
 
         $character->update($characterData);
+
+        return response()->json([
+            'message' => 'Personaje actualizado correctamente.',
+            'character' => $character->fresh()->load([
+                'user',
+                'characterClasses',
+                'campaigns',
+            ]),
+        ]);
+    }
+
+    /**
+     * Edita los datos de la ficha que no afectan a los cálculos de clase,
+     * raza o características: nombre, descripción, rasgos de personalidad,
+     * notas y puntos de golpe. Solo el propietario.
+     */
+    public function updateDetails(Request $request, $id)
+    {
+        $character = Character::find($id);
+
+        if (! $character) {
+            return response()->json([
+                'message' => 'Personaje no encontrado.',
+            ], 404);
+        }
+
+        if ((int) $character->user_id !== (int) $request->user()->id) {
+            return response()->json([
+                'message' => 'Solo el propietario puede editar este personaje.',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'name' => ['sometimes', 'required', 'string', 'max:255'],
+            'description' => ['sometimes', 'nullable', 'string', 'max:5000'],
+            'personality_trait' => ['sometimes', 'nullable', 'string', 'max:5000'],
+            'ideal' => ['sometimes', 'nullable', 'string', 'max:5000'],
+            'bond' => ['sometimes', 'nullable', 'string', 'max:5000'],
+            'flaw' => ['sometimes', 'nullable', 'string', 'max:5000'],
+            'notes' => ['sometimes', 'nullable', 'string', 'max:10000'],
+            'current_hit_points' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:9999'],
+            'maximum_hit_points' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:9999'],
+            'temporary_hit_points' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:9999'],
+            'inspiration' => ['sometimes', 'boolean'],
+            'experience_points' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:9999999'],
+            'ac_bonus' => ['sometimes', 'integer', 'min:-10', 'max:20'],
+            'strength' => ['sometimes', 'integer', 'min:1', 'max:30'],
+            'dexterity' => ['sometimes', 'integer', 'min:1', 'max:30'],
+            'constitution' => ['sometimes', 'integer', 'min:1', 'max:30'],
+            'intelligence' => ['sometimes', 'integer', 'min:1', 'max:30'],
+            'wisdom' => ['sometimes', 'integer', 'min:1', 'max:30'],
+            'charisma' => ['sometimes', 'integer', 'min:1', 'max:30'],
+            'strength_bonus' => ['sometimes', 'integer', 'min:-10', 'max:10'],
+            'dexterity_bonus' => ['sometimes', 'integer', 'min:-10', 'max:10'],
+            'constitution_bonus' => ['sometimes', 'integer', 'min:-10', 'max:10'],
+            'intelligence_bonus' => ['sometimes', 'integer', 'min:-10', 'max:10'],
+            'wisdom_bonus' => ['sometimes', 'integer', 'min:-10', 'max:10'],
+            'charisma_bonus' => ['sometimes', 'integer', 'min:-10', 'max:10'],
+        ]);
+
+        $character->update($validated);
 
         return response()->json([
             'message' => 'Personaje actualizado correctamente.',
@@ -793,6 +1052,10 @@ if ((int) $character->user_id !== (int) $user->id) {
             str_starts_with($index, 'armor-') => 'armor',
             str_starts_with($index, 'tool-') => 'tool',
             str_starts_with($index, 'language-') => 'language',
+            // Índices del catálogo sin prefijo: «light-armor», «simple-weapons», «thieves-tools»...
+            (bool) preg_match('/(armor|^shields?$)/', $index) => 'armor',
+            (bool) preg_match('/(weapon|^(dagger|dart|sling|quarterstaff|crossbow|club|handaxe|javelin|light-hammer|mace|spear|shortbow|longbow|longsword|rapier|shortsword|scimitar|whip|blowgun|net|battleaxe|flail|glaive|greataxe|greatsword|halberd|lance|maul|morningstar|pike|trident|war-pick|warhammer|sickle|greatclub))/', $index) => 'weapon',
+            (bool) preg_match('/(tools?|kit|instrument|supplies|utensils|vehicles?|gaming-set|dice-set|playing-card)/', $index) => 'tool',
             default => '',
         };
     }

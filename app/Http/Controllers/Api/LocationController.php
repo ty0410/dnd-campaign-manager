@@ -43,7 +43,7 @@ class LocationController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'type' => ['nullable', 'string', 'max:100'],
-            'description' => ['nullable', 'string'],
+            'description' => ['nullable', 'string', 'max:3000'],
             'parent_id' => ['nullable', 'integer', 'exists:locations,id'],
         ]);
 
@@ -124,7 +124,7 @@ class LocationController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'type' => ['nullable', 'string', 'max:100'],
-            'description' => ['nullable', 'string'],
+            'description' => ['nullable', 'string', 'max:3000'],
             'parent_id' => ['nullable', 'integer', 'exists:locations,id'],
         ]);
 

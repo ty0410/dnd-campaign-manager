@@ -1,7 +1,15 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\CampaignController;
+use App\Http\Controllers\Api\CharacterAttackController;
+use App\Http\Controllers\Api\CharacterInventoryController;
+use App\Http\Controllers\Api\CharacterProficiencyController;
+use App\Http\Controllers\Api\NpcDetailController;
+use App\Http\Controllers\Api\FriendshipController;
+use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\CampaignCharacterRequestController;
 use App\Http\Controllers\Api\CharacterClassController;
 use App\Http\Controllers\Api\CharacterMagicController;
 use App\Http\Controllers\Api\CharacterController;
@@ -29,6 +37,8 @@ Route::post('/logout', [AuthController::class, 'logout'])
     ->middleware('auth:sanctum');
 // Rutas para campañas
 
+Route::get('/campaigns/joined', [CampaignController::class, 'joined'])
+    ->middleware('auth:sanctum');
 Route::get('/campaigns', [CampaignController::class, 'index'])
     ->middleware('auth:sanctum');
 
@@ -41,6 +51,12 @@ Route::get('/campaigns/{id}', [CampaignController::class, 'show'])
 Route::put('/campaigns/{id}', [CampaignController::class, 'update'])
     ->middleware('auth:sanctum');
 
+Route::post('/campaigns/{id}/image', [CampaignController::class, 'uploadImage'])
+    ->middleware('auth:sanctum');
+
+Route::delete('/campaigns/{id}/image', [CampaignController::class, 'deleteImage'])
+    ->middleware('auth:sanctum');
+
 Route::delete('/campaigns/{id}', [CampaignController::class, 'destroy'])
     ->middleware('auth:sanctum');
 
@@ -49,6 +65,84 @@ Route::get('/campaigns/{campaignId}/characters', [CharacterController::class, 'i
     ->middleware('auth:sanctum');
 Route::post('/campaigns/{campaignId}/characters', [CharacterController::class, 'store'])
     ->middleware('auth:sanctum');
+Route::get('/campaigns/{campaignId}/available-characters', [CharacterController::class, 'availableForCampaign'])
+    ->middleware(['auth:sanctum', 'throttle:30,1']);
+// Administración (solo cuentas de administrador)
+Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
+    Route::get('/stats', [AdminController::class, 'stats']);
+    Route::get('/users', [AdminController::class, 'users']);
+    Route::post('/users/{id}/deactivate', [AdminController::class, 'deactivateUser']);
+    Route::post('/users/{id}/reactivate', [AdminController::class, 'reactivateUser']);
+
+    Route::get('/characters', [AdminController::class, 'characters']);
+    Route::patch('/characters/{id}', [AdminController::class, 'updateCharacter']);
+    Route::delete('/characters/{id}', [AdminController::class, 'destroyCharacter']);
+
+    Route::get('/campaigns', [AdminController::class, 'campaigns']);
+    Route::get('/campaigns/{id}', [AdminController::class, 'showCampaign']);
+    Route::patch('/campaigns/{id}', [AdminController::class, 'updateCampaign']);
+    Route::delete('/campaigns/{id}', [AdminController::class, 'destroyCampaign']);
+
+    Route::get('/admins', [AdminController::class, 'admins']);
+    Route::post('/admins', [AdminController::class, 'storeAdmin']);
+});
+
+// Inventario del personaje
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/characters/{characterId}/inventory', [CharacterInventoryController::class, 'store']);
+    Route::patch('/characters/{characterId}/inventory/{itemId}', [CharacterInventoryController::class, 'update']);
+    Route::delete('/characters/{characterId}/inventory/{itemId}', [CharacterInventoryController::class, 'destroy']);
+
+    // Competencias editables y ataques
+    Route::put('/characters/{characterId}/proficiency-level', [CharacterProficiencyController::class, 'setLevel']);
+    Route::post('/characters/{characterId}/proficiencies', [CharacterProficiencyController::class, 'store']);
+    Route::delete('/characters/{characterId}/proficiencies/{proficiencyId}', [CharacterProficiencyController::class, 'destroy']);
+    Route::post('/characters/{characterId}/attacks', [CharacterAttackController::class, 'store']);
+    Route::put('/characters/{characterId}/attacks/{attackId}', [CharacterAttackController::class, 'update']);
+    Route::delete('/characters/{characterId}/attacks/{attackId}', [CharacterAttackController::class, 'destroy']);
+
+    // Ficha completa de PNJ: foto, características y apuntes
+    Route::get('/npcs/{id}/detail', [NpcDetailController::class, 'show']);
+    Route::post('/npcs/{id}/image', [NpcDetailController::class, 'uploadImage']);
+    Route::delete('/npcs/{id}/image', [NpcDetailController::class, 'deleteImage']);
+    Route::put('/npcs/{id}/note', [NpcDetailController::class, 'saveNote']);
+    Route::post('/npcs/{id}/attributes', [NpcDetailController::class, 'storeAttribute']);
+    Route::patch('/npc-attributes/{id}', [NpcDetailController::class, 'updateAttribute']);
+    Route::delete('/npc-attributes/{id}', [NpcDetailController::class, 'destroyAttribute']);
+});
+
+// Perfil público y amistades
+Route::middleware('auth:sanctum')->group(function () {
+    Route::patch('/profile', [ProfileController::class, 'update']);
+    Route::post('/profile/avatar', [ProfileController::class, 'uploadAvatar']);
+    Route::delete('/profile/avatar', [ProfileController::class, 'deleteAvatar']);
+    Route::get('/users/{username}', [ProfileController::class, 'show']);
+
+    Route::get('/friends', [FriendshipController::class, 'index']);
+    Route::get('/friends/search', [FriendshipController::class, 'search'])->middleware('throttle:40,1');
+    Route::delete('/friends/{userId}', [FriendshipController::class, 'remove']);
+    Route::post('/friend-requests', [FriendshipController::class, 'send'])->middleware('throttle:30,1');
+    Route::post('/friend-requests/{id}/accept', [FriendshipController::class, 'accept']);
+    Route::post('/friend-requests/{id}/reject', [FriendshipController::class, 'reject']);
+    Route::delete('/friend-requests/{id}', [FriendshipController::class, 'cancel']);
+});
+
+// Solicitudes para incorporar personajes a campañas (doble aprobación)
+Route::get('/campaign-requests/mine', [CampaignCharacterRequestController::class, 'mine'])
+    ->middleware('auth:sanctum');
+Route::get('/campaigns/{campaignId}/requests', [CampaignCharacterRequestController::class, 'forCampaign'])
+    ->middleware('auth:sanctum');
+Route::post('/campaign-join', [CampaignCharacterRequestController::class, 'join'])
+    ->middleware(['auth:sanctum', 'throttle:10,1']);
+Route::post('/campaign-requests/{id}/approve', [CampaignCharacterRequestController::class, 'approve'])
+    ->middleware('auth:sanctum');
+Route::post('/campaign-requests/{id}/reject', [CampaignCharacterRequestController::class, 'reject'])
+    ->middleware('auth:sanctum');
+Route::delete('/campaign-requests/{id}', [CampaignCharacterRequestController::class, 'cancel'])
+    ->middleware('auth:sanctum');
+Route::post('/campaigns/{id}/invite-code', [CampaignController::class, 'regenerateInviteCode'])
+    ->middleware('auth:sanctum');
+
 Route::get('/characters', [CharacterController::class, 'myCharacters'])
     ->middleware('auth:sanctum');
 Route::post(
@@ -73,6 +167,8 @@ Route::post('/characters', [CharacterController::class, 'storeStandalone'])
 Route::get('/characters/{id}', [CharacterController::class, 'show'])
     ->middleware('auth:sanctum');
 Route::put('/characters/{id}', [CharacterController::class, 'update'])
+    ->middleware('auth:sanctum');
+Route::patch('/characters/{id}/details', [CharacterController::class, 'updateDetails'])
     ->middleware('auth:sanctum');
 Route::delete('/characters/{id}', [CharacterController::class, 'destroy'])
     ->middleware('auth:sanctum');

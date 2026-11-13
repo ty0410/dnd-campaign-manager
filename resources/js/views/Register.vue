@@ -1,5 +1,5 @@
 <template>
-    <main>
+    <main class="auth-page">
         <h1>Crear cuenta</h1>
 
         <form @submit.prevent="register">
@@ -13,6 +13,23 @@
                     placeholder="Tu nombre"
                     required
                 >
+            </div>
+
+            <div>
+                <label for="username">Nombre de usuario público</label>
+
+                <input
+                    id="username"
+                    v-model="username"
+                    type="text"
+                    placeholder="aventurero_42"
+                    minlength="3"
+                    maxlength="30"
+                    pattern="[A-Za-z0-9_]+"
+                    autocomplete="username"
+                    required
+                >
+                <small>Es lo que verán los demás (3 a 30: letras, números y guion bajo).</small>
             </div>
 
             <div>
@@ -58,7 +75,7 @@
             </button>
         </form>
 
-        <p v-if="message">
+        <p v-if="message" :class="messageIsError ? 'error-message' : 'success-message'" role="alert">
             {{ message }}
         </p>
 
@@ -77,17 +94,21 @@ import { saveToken } from '../services/auth';
 const router = useRouter();
 
 const name = ref('');
+const username = ref('');
 const email = ref('');
 const password = ref('');
 const passwordConfirmation = ref('');
 const message = ref('');
+const messageIsError = ref(false);
 
 const register = async () => {
     message.value = '';
+    messageIsError.value = false;
 
     try {
         const response = await api.post('/register', {
             name: name.value,
+            username: username.value,
             email: email.value,
             password: password.value,
             password_confirmation: passwordConfirmation.value,
@@ -101,6 +122,7 @@ const register = async () => {
 
         router.push('/dashboard');
     } catch (error) {
+        messageIsError.value = true;
         if (error.response) {
             if (error.response.data.errors) {
                 const errors = error.response.data.errors;
