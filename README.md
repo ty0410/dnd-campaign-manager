@@ -405,43 +405,6 @@ docker compose --env-file .env.docker down
 > los datos persistidos de la base de datos. Úsalo únicamente si quieres
 > eliminar esos datos.
 
-## Publicación temporal con Cloudflare Tunnel
-
-Para facilitar pruebas externas sin contratar un VPS ni abrir puertos
-del router, se ha contemplado el uso de **Cloudflare Quick Tunnel**
-sobre el contenedor web que escucha localmente en el puerto `8080`.
-
-Con `cloudflared` instalado y Docker Compose en ejecución, se puede
-iniciar un túnel temporal hacia el servicio local:
-
-``` powershell
-cloudflared tunnel --url http://localhost:8080
-```
-
-Cloudflare mostrará una URL pública temporal bajo `trycloudflare.com`.
-Esa dirección puede compartirse con testers mientras el túnel y el
-equipo anfitrión permanezcan encendidos.
-
-Consideraciones: - Quick Tunnel está pensado para pruebas, no como
-alojamiento de producción. - La URL puede cambiar al crear un nuevo
-túnel. - El equipo anfitrión debe permanecer encendido y conectado. - No
-publiques credenciales ni datos reales de usuarios. - Revisa `APP_URL`,
-cookies, CORS y configuración de proxy si la aplicación genera enlaces o
-redirecciones con el host local. - Un túnel público no convierte
-automáticamente una aplicación de desarrollo en un despliegue seguro.
-
-## Pruebas
-
-Ejecuta las pruebas automatizadas de Laravel con:
-
-``` bash
-php artisan test
-```
-
-La cobertura debe ampliarse progresivamente para autenticación,
-permisos, campañas, personajes, multiclase, generación de fichas y
-endpoints de la API.
-
 ## Estructura del proyecto
 
 ``` text
@@ -471,57 +434,3 @@ Dockerfile                 Imagen de la aplicación
 compose.yaml               Servicios Docker
 ```
 
-## Estado del desarrollo
-
-La situación funcional debe entenderse separando backend e interfaz:
-
-  -----------------------------------------------------------------------
-  Área                                Situación documentada
-  ----------------------------------- -----------------------------------
-  Registro, login y logout            Implementado
-
-  CRUD de campañas                    Implementado
-
-  Creación y ficha de personaje       Implementado y ampliado
-
-  Métodos de características y        Implementado
-  validación                          
-
-  Cálculo de ficha                    Implementado
-
-  Multiclase                          Modelo y API contemplados; interfaz
-                                      en evolución
-
-  Asignación de personajes existentes API disponible; interfaz en
-  a campañas                          evolución
-
-  NPCs, localizaciones y sesiones     API desarrollada; interfaz parcial
-
-  Encuentros y combatientes           API desarrollada; interfaz
-                                      pendiente/parcial
-
-  Catálogo D&D                        Consultas de backend implementadas
-
-  Inventario, monedas, conjuros y     Desarrollo progresivo
-  progresión                          
-
-  Docker                              Configuración incorporada y probada
-                                      localmente
-
-  Cloudflare Quick Tunnel             Vía de exposición temporal para
-                                      testers
-
-  Pruebas automatizadas               Necesitan ampliación
-  -----------------------------------------------------------------------
-
-Este estado es una fotografía del desarrollo, no una garantía de que
-todos los apartados estén terminados en cada commit. La implementación
-vigente se comprueba en el código del repositorio.
-
-## Aviso legal
-
-Dungeons & Dragons y sus marcas pertenecen a sus respectivos titulares.
-Este proyecto es una herramienta independiente creada con fines
-académicos y de gestión de partidas; no está afiliada, patrocinada ni
-respaldada por Wizards of the Coast. Los datos del catálogo dependen de
-D&D 5e API y de su disponibilidad.
