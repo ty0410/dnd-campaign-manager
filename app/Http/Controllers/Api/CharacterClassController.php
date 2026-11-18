@@ -49,7 +49,7 @@ class CharacterClassController extends Controller
         $class = $api->getClass($data['class_index']);
         if (!$class) throw ValidationException::withMessages(['class_index' => ['La clase no existe en D&D 5e 2014.']]);
 
-        $this->validateMulticlassPrerequisites($character, $class, $api);
+        // Los requisitos de característica son un aviso en la ficha, no una prohibición.
         $selected = array_values(array_unique($data['class_proficiencies'] ?? []));
         $allowed = collect(data_get($class, 'multi_classing.proficiencies', []))->pluck('index')->filter()->all();
         $choices = data_get($class, 'multi_classing.proficiency_choices', []);
@@ -322,6 +322,10 @@ class CharacterClassController extends Controller
                 $ability = $choice['ability'];
                 $character->{$ability} = (int) $character->{$ability} + (int) $choice['increase'];
             }
+            if ($character->target_level && (int) $character->level >= (int) $character->target_level) {
+                $character->target_level = null;
+                $character->level_plan = null;
+            }
             $character->save();
 
             return $character->levelUps()->create([
@@ -414,6 +418,10 @@ class CharacterClassController extends Controller
             $character->level <= 4 => 2, $character->level <= 8 => 3,
             $character->level <= 12 => 4, $character->level <= 16 => 5, default => 6,
         };
+            if ($character->target_level && (int) $character->level >= (int) $character->target_level) {
+                $character->target_level = null;
+                $character->level_plan = null;
+            }
         $character->save();
     }
 
@@ -425,6 +433,10 @@ class CharacterClassController extends Controller
             str_starts_with($index, 'armor-') => 'armor',
             str_starts_with($index, 'tool-') => 'tool',
             str_starts_with($index, 'language-') => 'language',
+            // Índices del catálogo sin prefijo: «light-armor», «simple-weapons», instrumentos...
+            (bool) preg_match('/(armor|^shields?$)/', $index) => 'armor',
+            (bool) preg_match('/(weapon|^(dagger|dart|sling|quarterstaff|crossbow|club|handaxe|javelin|light-hammer|mace|spear|shortbow|longbow|longsword|rapier|shortsword|scimitar|whip|blowgun|net|battleaxe|flail|glaive|greataxe|greatsword|halberd|lance|maul|morningstar|pike|trident|war-pick|warhammer|sickle|greatclub))/', $index) => 'weapon',
+            (bool) preg_match('/(tools?|kit|instrument|supplies|utensils|vehicles?|gaming-set|dice-set|playing-card|^(bagpipes|drum|dulcimer|flute|lute|lyre|horn|pan-flute|shawm|viol)$)/', $index) => 'tool',
             default => null,
         };
     }

@@ -345,7 +345,7 @@ small { color: var(--texto-secundario); }
 
 .page-content {
     flex: 1;
-    width: min(1240px, calc(100% - 2.5rem));
+    width: min(1640px, calc(100% - 3rem));
     margin: 2rem auto 4rem;
 }
 
@@ -3738,6 +3738,317 @@ a.add-button { text-decoration: none; }
     .oc-layout { grid-template-columns: minmax(0, 1fr); }
     .oc-side { position: static; order: -1; }
 }
+
+
+/* ==========================================================
+   Características a lo ancho, conjuros y detalles de cabecera
+   ========================================================== */
+
+/* Cabecera centrada */
+.character-sheet-header.sheet-hero { align-items: center; }
+.sheet-hero .sheet-portrait { margin-inline: auto; }
+.sheet-hero-top { align-items: center; }
+.sheet-hero .sheet-identity { align-self: center; }
+
+.sheet-chip--button {
+    font: inherit;
+    letter-spacing: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--texto-secundario);
+    cursor: pointer;
+}
+
+.sheet-chip--button:hover:not(:disabled) { background: var(--superficie-hover); box-shadow: none; filter: none; transform: none; color: var(--texto-fuerte); }
+.sheet-chip--button.is-on { border-color: var(--acento-texto); background: var(--rojo-anillo); color: var(--acento-texto-hover); }
+
+/* Botón de unirse a campaña en la esquina de la foto de cada tarjeta */
+.character-card { position: relative; }
+
+.card-join {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 3;
+    width: 2.2rem;
+    height: 2.2rem;
+    padding: 0;
+    border-radius: 50%;
+    box-shadow: 0 4px 14px rgb(0 0 0 / 55%);
+}
+
+.card-join .icon { width: 1.1rem; height: 1.1rem; }
+
+/* Características: una columna por característica, estilo hoja de personaje */
+.sheet-abilities {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 18px;
+}
+
+.ability-column {
+    display: grid;
+    align-content: start;
+    gap: 8px;
+    padding-bottom: 12px;
+    overflow: hidden;
+    border: 1px solid var(--borde);
+    border-radius: var(--forma-tarjeta);
+    background: linear-gradient(145deg, var(--superficie), var(--superficie-2));
+    box-shadow: var(--sombra-suave);
+}
+
+.ability-head { display: grid; justify-items: center; padding-bottom: 4px; }
+
+.ability-name {
+    width: 100%;
+    padding: 7px 8px;
+    border-bottom: 2px solid var(--rojo);
+    background: var(--cabecera-bg);
+    color: #fff8e9;
+    font-family: var(--fuente-titulos);
+    font-size: 0.76rem;
+    letter-spacing: 0.14em;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.ability-mod {
+    width: 4.6rem;
+    margin-top: 12px;
+    padding: 0.55rem 0 1.25rem;
+    background: rgb(217 184 121 / 12%);
+    clip-path: polygon(0 0, 100% 0, 100% 74%, 50% 100%, 0 74%);
+    color: var(--acento-texto-hover);
+    font-family: var(--fuente-titulos);
+    font-size: 2rem;
+    line-height: 1.1;
+    text-align: center;
+}
+
+.ability-score { margin-top: 2px; color: var(--texto-secundario); font-size: 0.85rem; }
+.ability-head.is-rollable:hover .ability-mod { background: rgb(217 184 121 / 22%); }
+.ability-column .ability-edit { margin: 0 12px; }
+
+.save-row,
+.skill-row {
+    display: grid;
+    grid-template-columns: 1.6rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 4px;
+    border-radius: 6px;
+    transition: background-color var(--dur-rapida) ease;
+}
+
+.save-row {
+    margin: 0 12px;
+    padding: 6px 8px;
+    border: 1px solid var(--borde);
+    font-size: 0.9rem;
+}
+
+.save-dot { color: var(--acento-texto); font-size: 0.95rem; text-align: center; }
+.save-dot.is-proficient { text-shadow: 0 0 8px var(--rojo-sombra); }
+.save-row strong,
+.skill-row strong { color: var(--texto-fuerte); }
+
+.skill-list { display: grid; gap: 1px; margin: 0 12px; padding: 0; list-style: none; }
+.skill-row { margin: 0; padding: 4px 6px; font-size: 0.95rem; }
+.skill-row .prof-mark { font-size: 0.85rem; text-align: center; letter-spacing: 0; }
+
+.save-row.is-editable,
+.skill-row.is-editable { cursor: pointer; }
+
+@media (hover: hover) {
+    .save-row:hover,
+    .skill-row:hover { background: var(--superficie-hover); }
+}
+
+@media (max-width: 1400px) { .sheet-abilities { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .sheet-abilities { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 460px) { .sheet-abilities { grid-template-columns: minmax(0, 1fr); } }
+
+/* Debajo de las características: dos columnas */
+.sheet-layout { grid-template-columns: minmax(0, 1.45fr) minmax(300px, 1fr); }
+.sheet-col--side { grid-column: auto; grid-template-columns: minmax(0, 1fr); }
+
+@media (max-width: 960px) {
+    .sheet-layout { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Conjuros */
+.spell-list li { align-items: center; }
+.spell-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+.spell-mark--button {
+    width: 1.3rem;
+    height: 1.3rem;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    box-shadow: none;
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.spell-mark--button:hover:not(:disabled) { background: var(--rojo-anillo); box-shadow: none; filter: none; transform: none; color: var(--acento-texto-hover); }
+.spell-list li .chip-remove { margin-left: auto; }
+
+
+/* Selección de conjuros por clase y nivel */
+.spell-sources { display: grid; gap: 10px; }
+.spell-source-group { display: grid; gap: 6px; }
+.spell-source-label { color: var(--acento-texto); font-family: var(--fuente-titulos); font-size: 0.74rem; letter-spacing: 0.14em; text-transform: uppercase; }
+.spell-info { margin: 0; padding: 8px 12px; border-left: 3px solid var(--acento-texto); border-radius: 0 8px 8px 0; background: var(--rojo-anillo); color: var(--texto); font-size: 0.95rem; }
+.spell-picker .catalog-list { min-width: 0; }
+.spell-browser { display: grid; gap: 12px; max-height: 340px; overflow-y: auto; padding-right: 4px; }
+.spell-browser-group h3 { position: sticky; top: 0; z-index: 1; margin: 0 0 4px; padding: 4px 0; background: var(--superficie); border-bottom: 1px solid var(--borde); color: var(--acento-texto); font-size: 0.78rem; letter-spacing: 0.14em; text-transform: uppercase; }
+.spell-browser .srd-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.spell-browser .srd-item small { color: var(--texto-secundario); font-size: 0.8rem; }
+.spell-browser .srd-item.is-owned { opacity: 0.55; }
+.add-spell-modal .catalog-picker { grid-template-columns: minmax(240px, 340px) minmax(0, 1fr); }
+
+
+/* Selección múltiple de conjuros */
+.spell-option { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; margin: 0; padding: 6px 10px; border-radius: 6px; color: var(--texto); font-weight: 400; cursor: pointer; transition: background-color var(--dur-rapida) ease; }
+.spell-option:hover { background: var(--superficie-hover); }
+.spell-option.is-selected { background: var(--rojo-anillo); }
+.spell-option.is-owned { opacity: 0.5; cursor: default; }
+.spell-option-name { overflow-wrap: anywhere; }
+.spell-option small { color: var(--texto-secundario); font-size: 0.8rem; }
+
+/* Clases del creador */
+.class-plan { display: grid; gap: 14px; }
+.class-plan-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: end; gap: 12px; }
+.class-plan-row .form-group { margin-bottom: 0; }
+.class-plan-row .icon-button { align-self: center; border: 1px solid var(--borde); }
+.class-level { display: flex; align-items: center; gap: 8px; padding-bottom: 4px; }
+.class-level output { min-width: 5.5rem; color: var(--acento-texto-hover); font-family: var(--fuente-titulos); text-align: center; }
+.class-level .icon-button { border: 1px solid var(--card-borde-extra); color: var(--acento-texto); }
+.class-plan-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.class-total { color: var(--texto-secundario); font-family: var(--fuente-titulos); font-size: 0.9rem; letter-spacing: 0.08em; }
+
+/* Avisos que no bloquean */
+.warning-message {
+    display: grid;
+    gap: 2px;
+    margin: 0;
+    padding: 0.7rem 0.95rem;
+    border: 1px solid color-mix(in srgb, var(--acento-texto) 45%, transparent);
+    border-left: 3px solid var(--acento-texto);
+    border-radius: 7px;
+    background: var(--rojo-anillo);
+    color: var(--texto);
+}
+
+.warning-message strong { color: var(--acento-texto-hover); }
+.warning-message small { margin-top: 4px; color: var(--texto-secundario); }
+.multiclass-automatic { display: grid; gap: 2px; padding: 0.6rem 0.9rem; border: 1px dashed var(--borde); border-radius: 7px; }
+.multiclass-automatic strong { color: var(--acento-texto); font-size: 0.85rem; }
+
+@media (max-width: 700px) { .class-plan-row { grid-template-columns: minmax(0, 1fr) auto; } .class-plan-row .class-level { grid-column: 1 / -1; } }
+
+
+/* ==========================================================
+   Cabecera de campaña con código, encuentros como consulta de monstruos
+   ========================================================== */
+
+.hero-chip--code { padding-right: 0.5rem; }
+.hero-chip--code code { margin-left: 0.2rem; padding: 0.05rem 0.5rem; border-radius: 6px; background: rgb(0 0 0 / 35%); color: #fff8e9; font-family: var(--fuente-titulos); letter-spacing: 0.18em; user-select: all; }
+
+.hero-chip--button {
+    font: inherit;
+    letter-spacing: 0;
+    cursor: pointer;
+    box-shadow: none;
+    transition: background-color var(--dur-rapida) ease, border-color var(--dur-rapida) ease;
+}
+
+.hero-chip--button:hover:not(:disabled) { border-color: rgb(217 184 121 / 80%); background: rgb(217 184 121 / 20%); filter: none; box-shadow: none; transform: none; color: #fff8e9; }
+
+.hero-badge {
+    display: inline-grid;
+    place-items: center;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    margin-left: 0.4rem;
+    padding: 0 0.3rem;
+    border-radius: 999px;
+    background: var(--acento-texto);
+    color: #1c1711;
+    font-size: 0.75rem;
+    font-weight: 800;
+}
+
+/* Encuentros: lista de monstruos con sus fichas */
+.encounter-monsters { display: grid; gap: 14px; }
+.monster-groups { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+
+.monster-group {
+    margin: 0;
+    border: 1px solid var(--borde);
+    border-left: 3px solid var(--rojo);
+    border-radius: 3px 10px 3px 10px;
+    background: var(--superficie-2);
+}
+
+.monster-group-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 14px; padding: 8px 12px; }
+
+.monster-toggle {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    min-width: 200px;
+    padding: 0.2rem 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--texto);
+    font-family: var(--fuente-texto);
+    letter-spacing: 0;
+    text-align: left;
+}
+
+.monster-toggle:hover:not(:disabled) { background: transparent; box-shadow: none; filter: none; transform: none; color: var(--texto-fuerte); }
+.monster-toggle strong { color: var(--texto-fuerte); font-family: var(--fuente-titulos); font-size: 1.05rem; }
+.monster-toggle small { color: var(--texto-secundario); font-size: 0.88rem; }
+.monster-chevron { transition: transform var(--dur) var(--ease); transform: rotate(-90deg); }
+.monster-chevron.is-open { transform: none; }
+
+.monster-count { display: flex; align-items: center; gap: 6px; }
+.monster-count output { min-width: 1.8rem; color: var(--acento-texto-hover); font-family: var(--fuente-titulos); font-size: 1.2rem; text-align: center; }
+.monster-count .icon-button { border: 1px solid var(--borde); }
+.monster-group-body { padding: 4px 12px 14px; }
+
+.monster-add { display: grid; gap: 8px; padding-top: 12px; border-top: 1px dashed var(--borde); }
+.monster-add-results { max-height: 220px; overflow-y: auto; }
+
+/* Tiradas dentro de las acciones de un monstruo */
+.stat-block-abilities li.is-rollable { padding: 4px 0; border-radius: 6px; }
+.stat-block-abilities li.is-rollable:hover { background: var(--rojo-anillo); }
+
+.roll-chip {
+    display: inline;
+    padding: 0.05rem 0.45rem;
+    border: 1px solid var(--card-borde-extra);
+    border-radius: 999px;
+    background: var(--rojo-anillo);
+    box-shadow: none;
+    color: var(--acento-texto-hover);
+    font-family: var(--fuente-texto);
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1.5;
+}
+
+.roll-chip:hover:not(:disabled) { background: rgb(217 184 121 / 28%); border-color: var(--acento-texto); box-shadow: none; filter: none; transform: none; }
+.roll-chip--damage { color: var(--error); border-color: color-mix(in srgb, var(--error) 45%, transparent); background: color-mix(in srgb, var(--error) 10%, transparent); }
 
 
 /* ==========================================================

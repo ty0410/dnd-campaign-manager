@@ -2,7 +2,7 @@
     <article class="stat-block" :aria-label="`Estadísticas de ${monster.name}`">
         <header class="stat-block-header">
             <h3>{{ monster.name }}</h3>
-            <p>{{ [monster.size, monster.type, monster.subtype ? `(${monster.subtype})` : '', monster.alignment].filter(Boolean).join(' ') }}</p>
+            <p>{{ [monster.size, monster.type, monster.subtype ? `(${monster.subtype})` : ''].filter(Boolean).join(' ') }}</p>
         </header>
 
         <dl class="stat-block-main">
@@ -13,7 +13,7 @@
         </dl>
 
         <ul class="stat-block-abilities">
-            <li v-for="ability in abilities" :key="ability.key">
+            <li v-for="ability in abilities" :key="ability.key" class="is-rollable" role="button" tabindex="0" :title="`Tirar ${ability.label}`" @click="rollAbility(ability)" @keydown.enter.prevent="rollAbility(ability)" @keydown.space.prevent="rollAbility(ability)">
                 <span>{{ ability.label }}</span>
                 <strong>{{ monster[ability.key] }}</strong>
                 <small>{{ modifier(monster[ability.key]) }}</small>
@@ -33,13 +33,21 @@
 
         <section v-for="group in groups" :key="group.title" class="stat-block-group">
             <h4>{{ group.title }}</h4>
-            <p v-for="entry in group.entries" :key="entry.name"><strong>{{ entry.name }}.</strong> {{ entry.desc }}</p>
+            <p v-for="entry in group.entries" :key="entry.name">
+                <strong>{{ entry.name }}.</strong>
+                <template v-for="(part, index) in parts(entry.desc)" :key="index">
+                    <button v-if="part.type === 'attack'" type="button" class="roll-chip" :title="`Tirar ataque de ${entry.name}`" @click="rollAttack(entry, part)">{{ part.text }}</button>
+                    <button v-else-if="part.type === 'damage'" type="button" class="roll-chip roll-chip--damage" :title="`Tirar daño de ${entry.name}`" @click="rollDamage(entry, part)">{{ part.text }}</button>
+                    <template v-else>{{ part.text }}</template>
+                </template>
+            </p>
         </section>
     </article>
 </template>
 
 <script setup>
 import { computed } from 'vue';
+import { rollD20, rollDice } from '../services/dice';
 
 const props = defineProps({ monster: { type: Object, required: true } });
 
@@ -47,6 +55,38 @@ const abilities = [
     { key: 'strength', label: 'FUE' }, { key: 'dexterity', label: 'DES' }, { key: 'constitution', label: 'CON' },
     { key: 'intelligence', label: 'INT' }, { key: 'wisdom', label: 'SAB' }, { key: 'charisma', label: 'CAR' },
 ];
+
+const scoreModifier = (score) => Math.floor((Number(score || 10) - 10) / 2);
+
+const rollAbility = (ability) => rollD20({ label: `${props.monster.name} · ${ability.label}`, modifier: scoreModifier(props.monster[ability.key]) });
+
+// Divide el texto de una acción para poder tirar su ataque («+5 to hit») y su daño («(2d6 + 3)»).
+const ROLL_PATTERN = /([+-]\d+) to hit|\((\d+)d(\d+)(?:\s*([+-])\s*(\d+))?\)/g;
+
+function parts(text = '') {
+    const result = [];
+    let last = 0;
+
+    for (const match of text.matchAll(ROLL_PATTERN)) {
+        if (match.index > last) result.push({ type: 'text', text: text.slice(last, match.index) });
+
+        if (match[1]) {
+            result.push({ type: 'attack', text: `${match[1]} to hit`, bonus: Number(match[1]) });
+        } else {
+            const sign = match[4] === '-' ? -1 : 1;
+            result.push({ type: 'damage', text: match[0], count: Number(match[2]), sides: Number(match[3]), modifier: match[5] ? sign * Number(match[5]) : 0 });
+        }
+
+        last = match.index + match[0].length;
+    }
+
+    if (last < text.length) result.push({ type: 'text', text: text.slice(last) });
+
+    return result;
+}
+
+const rollAttack = (entry, part) => rollD20({ label: `${props.monster.name} · ${entry.name} · ataque`, modifier: part.bonus });
+const rollDamage = (entry, part) => rollDice({ label: `${props.monster.name} · ${entry.name} · daño`, count: part.count, sides: part.sides, modifier: part.modifier });
 
 const modifier = (score) => {
     const value = Math.floor((Number(score || 10) - 10) / 2);

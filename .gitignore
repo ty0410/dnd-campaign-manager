@@ -27,3 +27,10 @@ Homestead.yaml
 Thumbs.db
 
 dnd-campaign-manager.zip
+
+# Configuracion Docker local
+.env.docker
+
+# Archivos auxiliares locales
+/Dockerfile.txt
+/respuesta.html

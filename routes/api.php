@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\CampaignController;
 use App\Http\Controllers\Api\CharacterAttackController;
 use App\Http\Controllers\Api\CharacterInventoryController;
 use App\Http\Controllers\Api\CharacterProficiencyController;
+use App\Http\Controllers\Api\CharacterSpellController;
 use App\Http\Controllers\Api\NpcDetailController;
 use App\Http\Controllers\Api\FriendshipController;
 use App\Http\Controllers\Api\ProfileController;
@@ -92,6 +93,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/characters/{characterId}/inventory', [CharacterInventoryController::class, 'store']);
     Route::patch('/characters/{characterId}/inventory/{itemId}', [CharacterInventoryController::class, 'update']);
     Route::delete('/characters/{characterId}/inventory/{itemId}', [CharacterInventoryController::class, 'destroy']);
+
+    // Conjuros editables desde la ficha
+    Route::post('/characters/{characterId}/spells', [CharacterSpellController::class, 'store']);
+    Route::patch('/characters/{characterId}/spells/{spellId}', [CharacterSpellController::class, 'update']);
+    Route::delete('/characters/{characterId}/spells/{spellId}', [CharacterSpellController::class, 'destroy']);
 
     // Competencias editables y ataques
     Route::put('/characters/{characterId}/proficiency-level', [CharacterProficiencyController::class, 'setLevel']);
@@ -293,6 +299,8 @@ Route::get('/dnd/spells/{index}', [DndSpellController::class, 'show']);
 // Rutas para la API de clases
 Route::get('/dnd/classes', [DndClassController::class, 'index']);
 Route::get('/dnd/classes/{index}', [DndClassController::class, 'show']);
+Route::get('/dnd/classes/{index}/spells', [DndClassController::class, 'spells']);
+Route::get('/dnd/classes/{index}/spell-list', [DndClassController::class, 'spellList']);
 Route::get('/dnd/feats/{index}', [DndClassController::class, 'feat']);
 Route::get('/dnd/classes/{index}/levels/{level}', [DndClassController::class, 'level']);
 Route::get('/dnd/subclasses/{index}/levels/{level}', [DndClassController::class, 'subclassLevel']);

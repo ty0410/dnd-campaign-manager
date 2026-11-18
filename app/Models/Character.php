@@ -21,6 +21,8 @@ class Character extends Model
         'description',
         'image_path',
         'ac_bonus',
+        'target_level',
+        'level_plan',
 
 
         // Raza y trasfondo
@@ -84,6 +86,7 @@ class Character extends Model
         'maximum_hit_points' => 'integer',
         'temporary_hit_points' => 'integer',
         'experience_points' => 'integer',
+        'level_plan' => 'array',
         'inspiration' => 'boolean',
     ];
 

@@ -181,7 +181,7 @@ class CharacterSheetCalculator
             $label = $body->item_name;
         } else {
             $value = 10 + $dex;
-            $label = 'Base 10';
+            $label = null;
 
             // Defensa sin armadura (no se aplica a la armadura equipada).
             if (in_array('barbarian', $classIndexes, true)) {

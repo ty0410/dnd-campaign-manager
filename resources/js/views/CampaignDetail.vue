@@ -15,8 +15,13 @@
                     <RouterLink to="/campaigns" class="back-link"><AppIcon name="back" /> Mis campañas</RouterLink>
                     <h1>{{ campaign.name }}</h1>
                     <p class="hero-description">{{ campaign.description || 'Esta campaña todavía no tiene descripción.' }}</p>
-                    <div v-if="campaign.master" class="hero-meta">
-                        <span class="hero-chip"><AppIcon name="crown" /> Dungeon Master: {{ campaign.master.name }}</span>
+                    <div class="hero-meta">
+                        <span v-if="campaign.master" class="hero-chip"><AppIcon name="crown" /> Dungeon Master: {{ campaign.master.name }}</span>
+                        <template v-if="isMaster">
+                            <span class="hero-chip hero-chip--code" title="Código para que los jugadores se unan">Código <code>{{ campaign.invite_code || '—' }}</code></span>
+                            <button class="hero-chip hero-chip--button" type="button" :disabled="!campaign.invite_code" @click="copyCode">{{ copied ? 'Copiado' : 'Copiar' }}</button>
+                            <button class="hero-chip hero-chip--button" type="button" @click="showRequests = true">Solicitudes<span v-if="pendingRequests.length" class="hero-badge">{{ pendingRequests.length }}</span></button>
+                        </template>
                     </div>
                 </div>
                 <div v-if="isMaster" class="hero-actions">
@@ -144,51 +149,10 @@
                         <RouterLink class="create-character-link" :to="{ name: 'character-create', query: { campaign_id: campaign.id } }">Crear un personaje nuevo <AppIcon name="external" /></RouterLink>
                     </section>
 
-                    <section v-if="isMaster" class="panel panel-wide recruit-panel">
-                        <header class="panel-heading">
-                            <div><h2>Código y solicitudes</h2></div>
-                        </header>
-                        <div class="recruit-grid">
-                            <div class="invite-box">
-                                <p class="invite-label">Código de la campaña</p>
-                                <div class="invite-code-row">
-                                    <code class="invite-code">{{ campaign.invite_code || '—' }}</code>
-                                    <button class="secondary-button" type="button" :disabled="!campaign.invite_code" @click="copyCode">{{ copied ? 'Copiado' : 'Copiar' }}</button>
-                                </div>
-                                <p class="invite-help">Compártelo con tus jugadores: lo usan en «Mis personajes → Unirse a campaña». Tú apruebas cada solicitud.</p>
-                                <button class="danger-button" type="button" @click="renewCode">Generar código nuevo</button>
-                            </div>
-                            <div class="pending-box">
-                                <p class="invite-label">Solicitudes pendientes</p>
-                                <ul v-if="pendingRequests.length" class="request-list">
-                                    <li v-for="entry in pendingRequests" :key="entry.id" class="request-row">
-                                        <div class="request-copy">
-                                            <template v-if="entry.direction === 'player_request'">
-                                                <strong>{{ entry.requester?.name || 'Un jugador' }} quiere añadir a «{{ entry.character?.name }}»</strong>
-                                                <small>Nivel {{ entry.character?.level }} · Esperando tu aprobación.</small>
-                                            </template>
-                                            <template v-else>
-                                                <strong>Invitación a «{{ entry.character?.name }}»</strong>
-                                                <small>Esperando que {{ entry.character?.user?.name || 'su dueño' }} la acepte.</small>
-                                            </template>
-                                        </div>
-                                        <div class="request-actions">
-                                            <template v-if="entry.direction === 'player_request'">
-                                                <button class="primary-button" type="button" :disabled="busyRequest === entry.id" @click="answerRequest(entry, 'approve')">Aprobar</button>
-                                                <button class="secondary-button" type="button" :disabled="busyRequest === entry.id" @click="answerRequest(entry, 'reject')">Rechazar</button>
-                                            </template>
-                                            <button v-else class="danger-button" type="button" :disabled="busyRequest === entry.id" @click="cancelInvitation(entry)">Retirar</button>
-                                        </div>
-                                    </li>
-                                </ul>
-                                <p v-else class="empty-hint">No hay solicitudes pendientes.</p>
-                            </div>
-                        </div>
-                    </section>
 
-                    <section class="panel panel-wide">
+                    <section v-if="isMaster" class="panel panel-wide">
                         <header class="panel-heading">
-                            <div><h2>Encuentros de combate</h2></div>
+                            <div><h2>Encuentros</h2></div>
                             <div class="panel-heading-tools">
                                 <button class="add-button" type="button" aria-label="Crear encuentro de combate" @click="showWizard = true"><AppIcon name="plus" /></button>
                                 <Transition name="tools">
@@ -203,10 +167,8 @@
                             <article v-for="encounter in encounters" :key="encounter.id" class="encounter-card selectable" :class="{ 'is-selected': isSelected('encounter', encounter.id) }" role="button" tabindex="0" :aria-pressed="isSelected('encounter', encounter.id)" @click="select('encounter', encounter.id)" @keydown.enter.prevent="select('encounter', encounter.id)" @keydown.space.prevent="select('encounter', encounter.id)">
                                 <header>
                                     <span class="encounter-title"><AppIcon name="swords" /><h3>{{ encounter.name }}</h3></span>
-                                    <span class="status-badge" :class="`status-badge--${encounter.status || 'planned'}`">{{ encounterStatus(encounter.status) }}</span>
                                 </header>
-                                <p class="item-excerpt">{{ encounter.description || 'Sin descripción.' }}</p>
-                                <footer>{{ combatantsLabel(encounter) }}</footer>
+                                <p class="item-excerpt">{{ monsterSummary(encounter) }}</p>
                             </article>
                         </div>
                         <p v-else class="empty-hint">Todavía no hay encuentros de combate preparados.</p>
@@ -238,11 +200,46 @@
         </Transition>
 
         <Transition name="modal">
+            <div v-if="showRequests && isMaster" class="modal-backdrop" @click.self="showRequests = false">
+                <section class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="requests-title">
+                    <button class="modal-close" type="button" aria-label="Cerrar" @click="showRequests = false"><AppIcon name="x" /></button>
+                    <h2 id="requests-title">Solicitudes</h2>
+                    <ul v-if="pendingRequests.length" class="request-list">
+                        <li v-for="entry in pendingRequests" :key="entry.id" class="request-row">
+                            <div class="request-copy">
+                                <template v-if="entry.direction === 'player_request'">
+                                    <strong>{{ entry.requester?.name || 'Un jugador' }} quiere añadir a «{{ entry.character?.name }}»</strong>
+                                    <small>Nivel {{ entry.character?.level }}</small>
+                                </template>
+                                <template v-else>
+                                    <strong>Invitación a «{{ entry.character?.name }}»</strong>
+                                    <small>Esperando a {{ entry.character?.user?.name || 'su dueño' }}</small>
+                                </template>
+                            </div>
+                            <div class="request-actions">
+                                <template v-if="entry.direction === 'player_request'">
+                                    <button class="primary-button" type="button" :disabled="busyRequest === entry.id" @click="answerRequest(entry, 'approve')">Aprobar</button>
+                                    <button class="secondary-button" type="button" :disabled="busyRequest === entry.id" @click="answerRequest(entry, 'reject')">Rechazar</button>
+                                </template>
+                                <button v-else class="danger-button" type="button" :disabled="busyRequest === entry.id" @click="cancelInvitation(entry)">Retirar</button>
+                            </div>
+                        </li>
+                    </ul>
+                    <p v-else class="empty-hint">No hay solicitudes pendientes.</p>
+                    <div class="modal-actions">
+                        <button class="danger-button" type="button" @click="renewCode">Generar código nuevo</button>
+                        <button class="secondary-button" type="button" @click="showRequests = false">Cerrar</button>
+                    </div>
+                </section>
+            </div>
+        </Transition>
+
+        <Transition name="modal">
             <CampaignInfoModal v-if="showInfo && campaign" :campaign="campaign" @close="showInfo = false" @saved="onInfoSaved" />
         </Transition>
 
         <Transition name="modal">
-            <EncounterWizard v-if="showWizard" :campaign-id="route.params.id" :campaign-characters="characters" @close="showWizard = false" @saved="onWizardSaved" />
+            <EncounterWizard v-if="showWizard" :campaign-id="route.params.id" @close="showWizard = false" @saved="onWizardSaved" />
         </Transition>
 
         <Transition name="modal">
@@ -296,7 +293,8 @@ import CampaignSheet from '../components/CampaignSheet.vue';
 import CampaignItemModal from '../components/CampaignItemModal.vue';
 import EncounterWizard from '../components/EncounterWizard.vue';
 import CampaignInfoModal from '../components/CampaignInfoModal.vue';
-import { ENCOUNTER_STATUSES, ITEM_TYPES, formatDate } from '../services/campaignItems';
+import { ITEM_TYPES, formatDate } from '../services/campaignItems';
+import { groupMonsters } from '../services/monsters';
 
 const route = useRoute();
 const router = useRouter();
@@ -313,6 +311,7 @@ const encounters = ref([]);
 const itemModal = ref(null); // { type, item? }
 const showWizard = ref(false);
 const showInfo = ref(false);
+const showRequests = ref(false);
 const editMode = ref(route.query.edit === '1');
 const flash = ref('');
 const pendingRequests = ref([]);
@@ -339,7 +338,9 @@ async function loadCampaign() {
     try {
         const [campaignRes, charsRes, npcsRes, locationsRes, sessionsRes, encountersRes] = await Promise.all([
             api.get(`/campaigns/${id}`), api.get(`/campaigns/${id}/characters`), api.get(`/campaigns/${id}/npcs`),
-            api.get(`/campaigns/${id}/locations`), api.get(`/campaigns/${id}/sessions`), api.get(`/campaigns/${id}/encounters`),
+            api.get(`/campaigns/${id}/locations`), api.get(`/campaigns/${id}/sessions`),
+            // Los encuentros son solo del Dungeon Master: para los demás la petición se rechaza.
+            api.get(`/campaigns/${id}/encounters`).catch(() => ({ data: [] })),
         ]);
         campaign.value = campaignRes.data;
         characters.value = charsRes.data;
@@ -554,10 +555,10 @@ function ownerLabel(character) {
 }
 const initial = (name) => name?.slice(0, 1)?.toUpperCase() || '?';
 
-const encounterStatus = (status) => ENCOUNTER_STATUSES[status] || ENCOUNTER_STATUSES.planned;
-function combatantsLabel(encounter) {
-    const total = encounter.combatants?.length || 0;
-    return total === 0 ? 'Sin combatientes' : `${total} ${total === 1 ? 'combatiente' : 'combatientes'}`;
+// «3 × Goblin · 1 × Bugbear»
+function monsterSummary(encounter) {
+    const groups = groupMonsters(encounter.combatants);
+    return groups.length ? groups.map((group) => `${group.count} × ${group.name}`).join(' · ') : 'Sin monstruos.';
 }
 
 function onKeydown(event) {

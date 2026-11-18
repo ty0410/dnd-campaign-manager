@@ -142,14 +142,14 @@ class CharacterMagicController extends Controller
         foreach ($summary['normal_slots'] as $slot) {
             $record = $character->spellSlots()->firstOrNew(['slot_type' => 'normal', 'spell_level' => $slot['spell_level']]);
             $record->total_slots = $slot['total_slots'];
-            $record->used_slots = min((int) ($record->used_slots ?? 0), $record->total_slots);
+            $this->clampSlot($record);
             $record->save();
         }
         if ($summary['pact_slots']) {
             $character->spellSlots()->where('slot_type', 'pact')->where('spell_level', '!=', $summary['pact_slots']['slot_level'])->delete();
             $record = $character->spellSlots()->firstOrNew(['slot_type' => 'pact', 'spell_level' => $summary['pact_slots']['slot_level']]);
             $record->total_slots = $summary['pact_slots']['total_slots'];
-            $record->used_slots = min((int) ($record->used_slots ?? 0), $record->total_slots);
+            $this->clampSlot($record);
             $record->save();
         }
         return response()->json($summary + ['saved_slots' => $character->spellSlots()->orderBy('slot_type')->orderBy('spell_level')->get()]);
@@ -160,9 +160,38 @@ class CharacterMagicController extends Controller
         $character = $this->accessible($request, $characterId);
         $slot = $character?->spellSlots()->find($slotId);
         if (!$slot) return response()->json(['message' => 'Espacio de conjuro no encontrado.'], 404);
-        $data = $request->validate(['used_slots' => ['required', 'integer', 'min:0', 'max:' . (int) $slot->total_slots]]);
-        $slot->update(['used_slots' => $data['used_slots']]);
+
+        $total = (int) $slot->total_slots;
+        $data = $request->validate([
+            // Cada bit es un círculo: permite tachar cualquiera, sin seguir un orden.
+            'used_mask' => ['sometimes', 'integer', 'min:0', 'max:' . ((1 << $total) - 1)],
+            'used_slots' => ['sometimes', 'integer', 'min:0', 'max:' . $total],
+        ]);
+
+        if (isset($data['used_mask'])) {
+            $slot->update(['used_mask' => $data['used_mask'], 'used_slots' => $this->bits($data['used_mask'])]);
+        } elseif (isset($data['used_slots'])) {
+            $slot->update(['used_slots' => $data['used_slots'], 'used_mask' => (1 << $data['used_slots']) - 1]);
+        } else {
+            throw ValidationException::withMessages(['used_mask' => ['Indica los espacios gastados.']]);
+        }
+
         return response()->json($slot->fresh());
+    }
+
+    /** Ajusta los espacios gastados al total disponible. */
+    private function clampSlot($record): void
+    {
+        $mask = ((int) ($record->used_mask ?? 0)) & ((1 << (int) $record->total_slots) - 1);
+        $record->used_mask = $mask;
+        $record->used_slots = $this->bits($mask);
+    }
+
+    private function bits(int $mask): int
+    {
+        $count = 0;
+        while ($mask) { $count += $mask & 1; $mask >>= 1; }
+        return $count;
     }
 
     private function subclassLevel(string $class): int

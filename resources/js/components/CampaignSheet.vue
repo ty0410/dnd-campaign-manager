@@ -33,11 +33,13 @@
 
             <!-- Encuentro -->
             <template v-else-if="type === 'encounter'">
-                <p><span class="status-badge" :class="`status-badge--${item.status || 'planned'}`">{{ statusLabel }}</span></p>
                 <section class="sheet-block"><h3>Descripción</h3><p v-if="item.description" class="sheet-text">{{ item.description }}</p><p v-else class="sheet-empty">Sin descripción.</p></section>
                 <section class="sheet-block">
-                    <h3>Combatientes</h3>
-                    <EncounterCombatants :encounter="item" :campaign-characters="campaignCharacters" @changed="$emit('changed')" />
+                    <h3>Monstruos</h3>
+                    <ul v-if="monsterGroups.length" class="sheet-list">
+                        <li v-for="group in monsterGroups" :key="group.key"><span>{{ group.name }}</span><small>× {{ group.count }}</small></li>
+                    </ul>
+                    <p v-else class="sheet-empty">Sin monstruos.</p>
                 </section>
             </template>
 
@@ -66,7 +68,7 @@
 import { computed } from 'vue';
 import { RouterLink } from 'vue-router';
 import AppIcon from './AppIcon.vue';
-import EncounterCombatants from './EncounterCombatants.vue';
+import { groupMonsters } from '../services/monsters';
 import { ENCOUNTER_STATUSES, ITEM_TYPES, itemSubtitle, formatDate } from '../services/campaignItems';
 
 const props = defineProps({
@@ -83,6 +85,8 @@ const kickers = { session: 'Sesión', location: 'Lugar', npc: 'Personaje no juga
 const pagePath = computed(() => (props.campaignId && ITEM_TYPES[props.type]
     ? `/campaigns/${props.campaignId}/${ITEM_TYPES[props.type].endpoint}/${props.item.id}`
     : null));
+
+const monsterGroups = computed(() => (props.type === 'encounter' ? groupMonsters(props.item.combatants) : []));
 
 const kicker = computed(() => kickers[props.type]);
 const title = computed(() => props.type === 'character' ? props.item.name : props.item[ITEM_TYPES[props.type].nameKey]);

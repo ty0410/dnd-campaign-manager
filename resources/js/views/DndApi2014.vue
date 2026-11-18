@@ -117,7 +117,7 @@ async function openItem(item) {
 
 // ---- Presentación genérica del JSON de la API ------------------------------
 const LABELS = {
-    hit_die: 'Dado de golpe', size: 'Tamaño', speed: 'Velocidad', alignment: 'Alineamiento', type: 'Tipo',
+    hit_die: 'Dado de golpe', size: 'Tamaño', speed: 'Velocidad', type: 'Tipo',
     level: 'Nivel', school: 'Escuela', range: 'Alcance', duration: 'Duración', casting_time: 'Tiempo de lanzamiento',
     components: 'Componentes', ritual: 'Ritual', concentration: 'Concentración', armor_class: 'Clase de armadura',
     hit_points: 'Puntos de golpe', challenge_rating: 'Desafío', cost: 'Coste', weight: 'Peso',
@@ -145,7 +145,7 @@ function scalar(value) {
     return String(value);
 }
 
-const SKIP = new Set(['index', 'name', 'url', 'updated_at', 'desc', 'higher_level', 'special_abilities', 'actions', 'legendary_actions', 'reactions', 'proficiencies', 'starting_equipment', 'class_levels', 'spellcasting', 'multi_classing', 'subclasses', 'starting_proficiencies', 'starting_proficiency_options', 'traits', 'language_options', 'ability_bonus_options', 'feature', 'feature_name']);
+const SKIP = new Set(['alignment', 'index', 'name', 'url', 'updated_at', 'desc', 'higher_level', 'special_abilities', 'actions', 'legendary_actions', 'reactions', 'proficiencies', 'starting_equipment', 'class_levels', 'spellcasting', 'multi_classing', 'subclasses', 'starting_proficiencies', 'starting_proficiency_options', 'traits', 'language_options', 'ability_bonus_options', 'feature', 'feature_name']);
 
 const facts = computed(() => {
     const data = detail.value || {};
@@ -179,7 +179,6 @@ const blocks = computed(() => {
     add('Idiomas', data.language_desc);
     add('Edad', data.age);
     add('Tamaño', data.size_description);
-    add('Alineamiento', data.alignment && typeof data.alignment === 'string' && data.alignment.length > 140 ? data.alignment : '');
 
     return list;
 });

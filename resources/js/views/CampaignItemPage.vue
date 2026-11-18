@@ -114,23 +114,12 @@
                 </div>
             </div>
 
-            <!-- Encuentro -->
+            <!-- Encuentro: solo consulta de las fichas de los monstruos para el Dungeon Master -->
             <div v-else-if="type === 'encounter'" class="item-columns item-columns--single">
+                <section v-if="item.description" class="item-card"><h2>Descripción</h2><p class="sheet-text">{{ item.description }}</p></section>
                 <section class="item-card">
-                    <p><span class="status-badge" :class="`status-badge--${item.status || 'planned'}`">{{ ENCOUNTER_STATUSES[item.status] || ENCOUNTER_STATUSES.planned }}</span></p>
-                    <h2>Descripción</h2>
-                    <p v-if="item.description" class="sheet-text">{{ item.description }}</p><p v-else class="sheet-empty">Sin descripción.</p>
-                </section>
-                <section class="item-card">
-                    <h2>Combatientes</h2>
-                    <EncounterCombatants :encounter="item" :campaign-characters="campaignCharacters" @changed="load" />
-                </section>
-                <section v-if="monsterBlocks.length" class="item-card">
-                    <h2>Estadísticas de los monstruos</h2>
-                    <details v-for="monster in monsterBlocks" :key="monster.index" class="monster-details">
-                        <summary>{{ monster.name }} <small>· CR {{ monster.challenge_rating }}</small></summary>
-                        <MonsterStatBlock :monster="monster" />
-                    </details>
+                    <h2>Monstruos</h2>
+                    <EncounterMonsters :encounter="item" @changed="load" />
                 </section>
             </div>
         </template>
@@ -148,8 +137,7 @@ import api from '../services/api';
 import AppIcon from '../components/AppIcon.vue';
 import UserAvatar from '../components/UserAvatar.vue';
 import CampaignItemModal from '../components/CampaignItemModal.vue';
-import EncounterCombatants from '../components/EncounterCombatants.vue';
-import MonsterStatBlock from '../components/MonsterStatBlock.vue';
+import EncounterMonsters from '../components/EncounterMonsters.vue';
 import { ENCOUNTER_STATUSES, ITEM_TYPES, formatDate } from '../services/campaignItems';
 
 const route = useRoute();
@@ -164,8 +152,6 @@ const campaignName = ref('');
 const isMaster = ref(false);
 const attributes = ref([]);
 const notes = ref([]);
-const campaignCharacters = ref([]);
-const monsterBlocks = ref([]);
 const loading = ref(true);
 const error = ref('');
 const flash = ref('');
@@ -203,22 +189,12 @@ async function load() {
             item.value = data;
             const campaign = await api.get(`/campaigns/${route.params.id}`);
             campaignName.value = campaign.data.name;
-            if (type.value === 'encounter') {
-                const characters = await api.get(`/campaigns/${route.params.id}/characters`);
-                campaignCharacters.value = characters.data;
-                await loadMonsters();
-            }
         }
     } catch (err) {
         error.value = err.response?.data?.message || 'No se pudo cargar esta página.';
     } finally { loading.value = false; }
 }
 
-async function loadMonsters() {
-    const indexes = [...new Set((item.value?.combatants || []).map((combatant) => combatant.monster_index).filter(Boolean))];
-    const results = await Promise.allSettled(indexes.map((index) => api.get(`/dnd/monsters/${index}`)));
-    monsterBlocks.value = results.filter((result) => result.status === 'fulfilled').map((result) => result.value.data);
-}
 
 const notify = (text) => { flash.value = text; setTimeout(() => { flash.value = ''; }, 5000); };
 

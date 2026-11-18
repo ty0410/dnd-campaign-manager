@@ -14,6 +14,42 @@ class DndClassController extends Controller
         $this->dndApiService = $dndApiService;
     }
 
+    /** Lista de conjuros de una clase lanzadora (para añadir conjuros desde la ficha). */
+    public function spells(string $index)
+    {
+        try {
+            return response()->json($this->dndApiService->getClassSpells($index));
+        } catch (\Throwable $e) {
+            return response()->json(['message' => 'No se pudo consultar el catálogo.'], 502);
+        }
+    }
+
+    /** Conjuros de una clase con su nivel y escuela, para mostrarlos agrupados. */
+    public function spellList(string $index)
+    {
+        try {
+            $list = \Illuminate\Support\Facades\Cache::remember('dnd_class_spell_list_' . $index, now()->addDay(), function () use ($index) {
+                $results = collect($this->dndApiService->getClassSpells($index)['results'] ?? []);
+                $details = collect($this->dndApiService->getSpellDetailsForIndexes($results->pluck('index')->all()))->keyBy('index');
+
+                return $results->map(function ($spell) use ($details) {
+                    $detail = $details->get($spell['index']);
+
+                    return $detail ? [
+                        'index' => $detail['index'],
+                        'name' => $detail['name'],
+                        'level' => (int) ($detail['level'] ?? 0),
+                        'school' => data_get($detail, 'school.name'),
+                    ] : null;
+                })->filter()->sortBy([['level', 'asc'], ['name', 'asc']])->values()->all();
+            });
+
+            return response()->json($list);
+        } catch (\Throwable $e) {
+            return response()->json(['message' => 'No se pudo consultar el catálogo.'], 502);
+        }
+    }
+
     public function index()
     {
         return response()->json(

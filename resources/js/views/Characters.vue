@@ -66,6 +66,7 @@
 
             <div v-if="filteredCharacters.length" class="characters-grid stagger">
                 <article v-for="character in filteredCharacters" :key="character.id" class="character-card character-card-link">
+                    <button type="button" class="card-join" :aria-label="`Unir a ${character.name} a una campaña`" title="Unirse a una campaña" @click="joining = character"><AppIcon name="party" /></button>
                     <RouterLink :to="{ name: 'character-detail', params: { id: character.id } }" class="character-card-main">
                         <div class="character-portrait">
                             <img v-if="character.image_url" :src="character.image_url" :alt="`Retrato de ${character.name}`" loading="lazy" />
@@ -94,6 +95,10 @@
         </template>
 
 
+        <Transition name="modal">
+            <JoinCampaignModal v-if="joining" :character-id="joining.id" :character-name="joining.name" @close="joining = null" @sent="onJoinSent" />
+        </Transition>
+
         <RouterLink class="back-link" to="/dashboard">
             <AppIcon name="back" /> Volver al dashboard
         </RouterLink>
@@ -105,9 +110,11 @@ import { computed, onMounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import api from '../services/api';
 import AppIcon from '../components/AppIcon.vue';
+import JoinCampaignModal from '../components/JoinCampaignModal.vue';
 
 const characters = ref([]);
 const search = ref('');
+const joining = ref(null);
 
 // Búsqueda sin distinguir mayúsculas ni acentos.
 const normalize = (text) => String(text ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -148,6 +155,12 @@ async function loadRequests() {
     } catch {
         // Las solicitudes son secundarias: si fallan no bloquean el listado.
     }
+}
+
+function onJoinSent(message) {
+    joining.value = null;
+    flash.value = message;
+    loadRequests();
 }
 
 async function respond(entry, action) {

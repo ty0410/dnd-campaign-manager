@@ -61,8 +61,7 @@ export const ITEM_TYPES = {
         blank: () => ({ name: '', description: '', status: 'planned' }),
         fields: [
             { key: 'name', label: 'Nombre del encuentro', required: true, max: 255, placeholder: 'Emboscada en el camino real' },
-            { key: 'status', label: 'Estado', type: 'select', options: ENCOUNTER_STATUSES },
-            { key: 'description', label: 'Descripción', type: 'textarea', max: LONG_TEXT_MAX },
+            { key: 'description', label: 'Notas del encuentro', type: 'textarea', max: LONG_TEXT_MAX },
         ],
     },
 };

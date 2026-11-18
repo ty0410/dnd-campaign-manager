@@ -15,6 +15,7 @@ class CharacterSpellSlot extends Model
         'spell_level',
         'total_slots',
         'used_slots',
+        'used_mask',
     ];
 
     protected $casts = [

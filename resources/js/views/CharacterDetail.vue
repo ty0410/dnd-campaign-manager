@@ -24,7 +24,6 @@
                         <img v-if="character.image_url" :src="character.image_url" :alt="`Retrato de ${character.name}`">
                         <span v-else aria-hidden="true">{{ character.name?.slice(0, 1)?.toUpperCase() }}</span>
                     </div>
-                    <button v-if="isOwner" type="button" class="portrait-join" aria-label="Unirse a una campaña" title="Unirse a una campaña" @click="showJoin = true"><AppIcon name="party" /></button>
                 </div>
 
                 <div class="sheet-hero-body">
@@ -35,14 +34,15 @@
                             <p class="sheet-subtitle">{{ [character.race, character.background].filter(Boolean).join(' · ') }}</p>
                             <div class="sheet-class-chips">
                                 <span v-for="characterClass in character.character_classes" :key="characterClass.id" class="sheet-chip">{{ characterClass.class }} {{ characterClass.level }}</span>
-                                <label v-if="editMode" class="sheet-chip sheet-chip--toggle"><input type="checkbox" :checked="character.inspiration" @change="savePatch({ inspiration: $event.target.checked })"> Inspiración</label>
+                                <button v-if="isOwner" type="button" class="sheet-chip sheet-chip--button" :class="{ 'is-on': character.inspiration }" :aria-pressed="!!character.inspiration" @click="savePatch({ inspiration: !character.inspiration })">{{ character.inspiration ? '★' : '☆' }} Inspiración</button>
                                 <span v-else-if="character.inspiration" class="sheet-chip">★ Inspiración</span>
                             </div>
                         </div>
 
                         <div class="sheet-actions">
                             <button v-if="isOwner" type="button" class="secondary-button" :class="{ 'is-active': editMode }" :aria-pressed="editMode" @click="toggleEdit"><AppIcon name="edit" /> {{ editMode ? 'Listo' : 'Editar' }}</button>
-                            <button v-if="isOwner && sheet.total_level < 20" type="button" class="primary-button" @click="openLevelChooser">Subir de nivel</button>
+                            <button v-if="isOwner && sheet.total_level < 20" type="button" class="primary-button" @click="pendingLevels ? continueLevelUps() : openLevelChooser()">{{ pendingLevels ? `Continuar · nivel ${sheet.total_level} de ${character.target_level}` : 'Subir de nivel' }}</button>
+                            <button v-if="isOwner && editMode" type="button" class="danger-button" @click="deleteCharacter"><AppIcon name="trash" /> Eliminar</button>
                             <button type="button" class="secondary-button" @click="exportJson">Exportar JSON</button>
                         </div>
                     </div>
@@ -72,7 +72,7 @@
 
                         <div class="sheet-stat">
                             <strong>{{ sheet.armor_class.value }}</strong>
-                            <small>{{ sheet.armor_class.base_label }}<template v-if="sheet.armor_class.shield"> + escudo</template></small>
+                            <small v-if="sheet.armor_class.base_label || sheet.armor_class.shield">{{ sheet.armor_class.base_label }}<template v-if="sheet.armor_class.shield"> {{ sheet.armor_class.base_label ? '+ escudo' : 'Escudo' }}</template></small>
                             <span>CA</span>
                             <input v-if="editMode" class="stat-bonus" type="number" min="-10" max="20" :value="character.ac_bonus" aria-label="Bonificador manual a la CA" title="Bonificador manual" @change="savePatch({ ac_bonus: numberOrZero($event) })">
                         </div>
@@ -92,77 +92,39 @@
                 </div>
             </header>
 
+            <!-- Características a todo el ancho, con su salvación y sus habilidades debajo -->
+            <section class="sheet-abilities" aria-label="Características, salvaciones y habilidades">
+                <article v-for="ability in abilityColumns" :key="ability.key" class="ability-column">
+                    <div class="ability-head" :class="{ 'is-rollable': !editMode }" role="button" tabindex="0" :title="editMode ? '' : 'Tirar 1d20'" @click="!editMode && rollCheck(ability.name, ability.modifier)" @keydown.enter.prevent="!editMode && rollCheck(ability.name, ability.modifier)" @keydown.space.prevent="!editMode && rollCheck(ability.name, ability.modifier)">
+                        <span class="ability-name">{{ ability.name }}</span>
+                        <strong class="ability-mod">{{ signed(ability.modifier) }}</strong>
+                        <small class="ability-score">{{ value(ability.effective_score) }}<template v-if="ability.custom_bonus"> ({{ ability.base_score }} {{ signed(ability.custom_bonus) }})</template></small>
+                    </div>
+
+                    <div v-if="editMode" class="ability-edit">
+                        <label>Base<input type="number" min="1" max="30" :value="ability.base_score" :aria-label="`${ability.name}: puntuación base`" @change="savePatch({ [ability.key]: numberOrNull($event) ?? ability.base_score })"></label>
+                        <label>Bono<input type="number" min="-10" max="10" :value="ability.custom_bonus" :aria-label="`${ability.name}: bonificador`" @change="savePatch({ [`${ability.key}_bonus`]: numberOrZero($event) })"></label>
+                    </div>
+
+                    <div class="save-row" :class="{ 'is-rollable': !editMode, 'is-editable': editMode }" role="button" tabindex="0" :title="editMode ? 'Cambiar competencia' : 'Tirar salvación'" @click="onSaveClick(ability.key, ability.save)" @keydown.enter.prevent="onSaveClick(ability.key, ability.save)" @keydown.space.prevent="onSaveClick(ability.key, ability.save)">
+                        <span class="save-dot" :class="{ 'is-proficient': ability.save.proficiency_level >= 1 }" aria-hidden="true">{{ ability.save.proficiency_level >= 1 ? '●' : '○' }}</span>
+                        <span class="save-label">Salvación<span v-if="ability.save.proficiency_level >= 1" class="visually-hidden"> (competente)</span></span>
+                        <strong>{{ signed(ability.save.modifier) }}</strong>
+                    </div>
+
+                    <ul v-if="ability.skills.length" class="skill-list">
+                        <li v-for="skill in ability.skills" :key="skill.index" class="skill-row" :class="{ 'is-rollable': !editMode, 'is-editable': editMode }" role="button" tabindex="0" :title="editMode ? 'Cambiar competencia' : 'Tirar 1d20'" @click="onSkillClick(skill)" @keydown.enter.prevent="onSkillClick(skill)" @keydown.space.prevent="onSkillClick(skill)">
+                            <span class="prof-mark" aria-hidden="true">{{ stars(skill.proficiency_level, editMode) }}</span>
+                            <span class="skill-name">{{ skill.name }}<span v-if="skill.proficiency_level" class="visually-hidden">{{ skill.proficiency_level >= 2 ? ' (pericia)' : ' (competente)' }}</span></span>
+                            <strong>{{ signed(skill.modifier) }}</strong>
+                        </li>
+                    </ul>
+                </article>
+            </section>
+
             <div class="sheet-layout">
-                <!-- Columna izquierda: características, salvaciones y habilidades -->
-                <div class="sheet-col sheet-col--stats">
-                    <section class="sheet-section">
-                        <div class="sheet-section-heading"><h2>Características</h2></div>
-                        <div class="sheet-ability-grid">
-                            <article v-for="(ability, key) in sheet.ability_scores" :key="key" class="sheet-ability-card" :class="{ 'is-rollable': !editMode }" role="button" tabindex="0" :title="editMode ? '' : 'Tirar 1d20'" @click="!editMode && rollCheck(ability.name, ability.modifier)" @keydown.enter.prevent="!editMode && rollCheck(ability.name, ability.modifier)" @keydown.space.prevent="!editMode && rollCheck(ability.name, ability.modifier)">
-                                <span>{{ ability.name }}</span>
-                                <strong>{{ value(ability.effective_score) }}</strong>
-                                <small>{{ signed(ability.modifier) }}</small>
-                                <div v-if="editMode" class="ability-edit" @click.stop>
-                                    <label>Base<input type="number" min="1" max="30" :value="ability.base_score" :aria-label="`${ability.name}: puntuación base`" @change="savePatch({ [key]: numberOrNull($event) ?? ability.base_score })"></label>
-                                    <label>Bono<input type="number" min="-10" max="10" :value="ability.custom_bonus" :aria-label="`${ability.name}: bonificador`" @change="savePatch({ [`${key}_bonus`]: numberOrZero($event) })"></label>
-                                </div>
-                                <em v-else-if="ability.custom_bonus">{{ ability.base_score }} {{ signed(ability.custom_bonus) }}</em>
-                            </article>
-                        </div>
-                    </section>
-
-                    <section class="sheet-section">
-                        <div class="sheet-section-heading"><h2>Salvaciones</h2></div>
-                        <div class="sheet-list">
-                            <div v-for="(save, key) in sheet.saving_throws" :key="key" class="sheet-list-row sheet-prof-row" :class="{ 'is-rollable': !editMode, 'is-editable': editMode }" role="button" tabindex="0" :title="editMode ? 'Cambiar competencia' : 'Tirar 1d20'" @click="onSaveClick(key, save)" @keydown.enter.prevent="onSaveClick(key, save)" @keydown.space.prevent="onSaveClick(key, save)">
-                                <span class="prof-mark" aria-hidden="true">{{ stars(save.proficiency_level, editMode) }}</span>
-                                <span class="prof-name">{{ save.name }}<span v-if="save.proficiency_level" class="visually-hidden"> (competente)</span></span>
-                                <strong>{{ signed(save.modifier) }}</strong>
-                            </div>
-                        </div>
-                    </section>
-
-                    <section class="sheet-section">
-                        <div class="sheet-section-heading"><h2>Habilidades</h2></div>
-                        <div class="sheet-list">
-                            <div v-for="skill in Object.values(sheet.skills)" :key="skill.index" class="sheet-list-row sheet-prof-row" :class="{ 'is-rollable': !editMode, 'is-editable': editMode }" role="button" tabindex="0" :title="editMode ? 'Cambiar competencia' : 'Tirar 1d20'" @click="onSkillClick(skill)" @keydown.enter.prevent="onSkillClick(skill)" @keydown.space.prevent="onSkillClick(skill)">
-                                <span class="prof-mark" aria-hidden="true">{{ stars(skill.proficiency_level, editMode) }}</span>
-                                <span class="prof-name">{{ skill.name }} <small>({{ skill.ability }})</small><span v-if="skill.proficiency_level" class="visually-hidden">{{ skill.proficiency_level >= 2 ? ' (pericia)' : ' (competente)' }}</span></span>
-                                <strong>{{ signed(skill.modifier) }}</strong>
-                            </div>
-                        </div>
-                    </section>
-                </div>
-
-                <!-- Columna central: clases, ataques e historia -->
+                <!-- Columna central: ataques, conjuros y progresión -->
                 <div class="sheet-col sheet-col--main">
-                    <section class="sheet-section">
-                        <div class="sheet-section-heading"><h2>Clases</h2></div>
-                        <div v-if="character.character_classes?.length" class="sheet-class-grid">
-                    <article v-for="characterClass in character.character_classes" :key="characterClass.id" class="sheet-detail-card">
-                        <h3>{{ characterClass.class }}</h3>
-                        <p>Nivel {{ characterClass.level }}</p>
-                        <p v-if="characterClass.subclass_name">Subclase: <strong>{{ characterClass.subclass_name }}</strong></p>
-                        <div v-if="classFeatures[characterClass.id]?.length" class="sheet-class-features">
-                            <h4>Rasgos</h4>
-                            <ul><li v-for="(feature, index) in classFeatures[characterClass.id]" :key="`${characterClass.id}-${index}`"><strong>{{ feature.name }}</strong><span v-if="feature.subclass"> · subclase</span><span v-if="feature.level"> · nivel {{ feature.level }}</span><p v-if="feature.desc">{{ Array.isArray(feature.desc) ? feature.desc.join(' ') : feature.desc }}</p></li></ul>
-                        </div>
-                        <details v-if="classMagic[characterClass.id]?.spellcasting" class="sheet-spell-manager">
-                            <summary>Gestionar conjuros de {{ characterClass.class }}</summary>
-                            <div class="sheet-spell-options">
-                                <label v-for="spell in classMagic[characterClass.id].spells" :key="spell.index" class="sheet-spell-option">
-                                    <input type="checkbox" :value="spell.index" v-model="classMagic[characterClass.id].selectedSpells">
-                                    <span>{{ spell.name }} <small>{{ spell.level === 0 ? 'Truco' : `Nivel ${spell.level}` }}<template v-if="spell.school"> · {{ spell.school }}</template></small></span>
-                                    <input v-if="classMagic[characterClass.id].spell_type === 'prepared' && spell.level > 0" type="checkbox" :value="spell.index" v-model="classMagic[characterClass.id].preparedSpells" title="Preparado" aria-label="Preparado">
-                                </label>
-                            </div>
-                            <button type="button" class="secondary-button" :disabled="savingSpells === characterClass.id" @click="saveSpells(characterClass)">{{ savingSpells === characterClass.id ? 'Guardando...' : 'Guardar selección de conjuros' }}</button>
-                        </details>
-                    </article>
-                        </div>
-                        <p v-else class="sheet-empty">Sin clases registradas.</p>
-                    </section>
-
                     <section class="sheet-section">
                         <div class="sheet-section-heading sheet-section-heading--action">
                             <h2>Ataques</h2>
@@ -189,37 +151,16 @@
                     </section>
 
                     <section class="sheet-section">
-                        <div class="sheet-section-heading"><h2>Historia</h2></div>
-                        <div class="sheet-story-grid">
-                            <article v-for="field in storyFields" :key="field.key" class="sheet-detail-card">
-                                <h3>{{ field.label }}</h3>
-                                <textarea v-if="editMode" rows="3" maxlength="5000" :value="character[field.key] ?? ''" :aria-label="field.label" @change="savePatch({ [field.key]: $event.target.value })"></textarea>
-                                <p v-else>{{ character[field.key] || '—' }}</p>
-                            </article>
+                        <div class="sheet-section-heading sheet-section-heading--action">
+                            <h2>Conjuros</h2>
+                            <button v-if="isOwner && editMode" type="button" class="icon-button add-button" aria-label="Añadir conjuro" title="Añadir conjuro" @click="showAddSpell = true"><AppIcon name="plus" /></button>
                         </div>
-                        <article v-if="editMode || character.description" class="sheet-description">
-                            <h3>Descripción</h3>
-                            <textarea v-if="editMode" rows="4" maxlength="5000" :value="character.description ?? ''" aria-label="Descripción" @change="savePatch({ description: $event.target.value })"></textarea>
-                            <p v-else>{{ character.description }}</p>
-                        </article>
-                        <article v-if="editMode || character.notes" class="sheet-description">
-                            <h3>Notas</h3>
-                            <textarea v-if="editMode" rows="4" maxlength="10000" :value="character.notes ?? ''" aria-label="Notas" @change="savePatch({ notes: $event.target.value })"></textarea>
-                            <p v-else>{{ character.notes }}</p>
-                        </article>
-                    </section>
-                </div>
-
-                <!-- Columna derecha: magia, equipo y competencias -->
-                <div class="sheet-col sheet-col--side">
-                    <section class="sheet-section">
-                        <div class="sheet-section-heading"><h2>Magia</h2></div>
 
                         <div v-if="slotRows.length" class="slot-list">
                             <div v-for="slot in slotRows" :key="slot.id" class="slot-row">
                                 <span>{{ slot.label }}</span>
                                 <div class="slot-dots" role="group" :aria-label="`Espacios de ${slot.label}`">
-                                    <button v-for="n in slot.total_slots" :key="n" type="button" class="slot-dot" :class="{ 'is-full': n <= slot.available }" :aria-pressed="n <= slot.available" :aria-label="`Espacio ${n} de ${slot.label}: ${n <= slot.available ? 'disponible' : 'gastado'}`" :disabled="!isOwner" @click="setSlotAvailable(slot, n <= slot.available ? n - 1 : n)"></button>
+                                    <button v-for="n in slot.total_slots" :key="n" type="button" class="slot-dot" :class="{ 'is-full': !isSlotUsed(slot, n - 1) }" :aria-pressed="!isSlotUsed(slot, n - 1)" :aria-label="`Espacio ${n} de ${slot.label}: ${isSlotUsed(slot, n - 1) ? 'gastado' : 'disponible'}`" :disabled="!isOwner" @click="toggleSlot(slot, n - 1)"></button>
                                 </div>
                             </div>
                         </div>
@@ -228,9 +169,11 @@
                             <div v-for="group in spellGroups" :key="group.level" class="spell-group">
                                 <h3>{{ group.label }}</h3>
                                 <ul class="spell-list">
-                                    <li v-for="spell in group.spells" :key="spell.id" :class="{ 'is-unprepared': spell.spell_type === 'prepared' && !spell.is_prepared }">
-                                        <span class="spell-mark" aria-hidden="true">{{ spell.spell_type === 'prepared' ? (spell.is_prepared ? '◆' : '◇') : '' }}</span>
-                                        {{ spell.spell_name }}
+                                    <li v-for="spell in group.spells" :key="spell.id" :class="{ 'is-unprepared': canPrepare(spell) && !spell.is_prepared }">
+                                        <button v-if="isOwner && canPrepare(spell)" type="button" class="spell-mark spell-mark--button" :aria-pressed="!!spell.is_prepared" :aria-label="`${spell.spell_name}: ${spell.is_prepared ? 'preparado' : 'sin preparar'}`" @click="togglePrepared(spell)">{{ spell.is_prepared ? '◆' : '◇' }}</button>
+                                        <span v-else class="spell-mark" aria-hidden="true">{{ canPrepare(spell) ? (spell.is_prepared ? '◆' : '◇') : '' }}</span>
+                                        <span class="spell-name">{{ spell.spell_name }}</span>
+                                        <button v-if="editMode && isOwner" type="button" class="chip-remove" :aria-label="`Quitar ${spell.spell_name}`" @click="removeSpell(spell)">×</button>
                                     </li>
                                 </ul>
                             </div>
@@ -238,6 +181,25 @@
                         <p v-else class="sheet-empty">Sin conjuros.</p>
                     </section>
 
+                    <section class="sheet-section">
+                        <div class="sheet-section-heading"><h2>Clases</h2></div>
+                        <div v-if="character.character_classes?.length" class="sheet-class-grid">
+                    <article v-for="characterClass in character.character_classes" :key="characterClass.id" class="sheet-detail-card">
+                        <h3>{{ characterClass.class }}</h3>
+                        <p>Nivel {{ characterClass.level }}</p>
+                        <p v-if="characterClass.subclass_name">Subclase: <strong>{{ characterClass.subclass_name }}</strong></p>
+                        <div v-if="classFeatures[characterClass.id]?.length" class="sheet-class-features">
+                            <h4>Rasgos</h4>
+                            <ul><li v-for="(feature, index) in classFeatures[characterClass.id]" :key="`${characterClass.id}-${index}`"><strong>{{ feature.name }}</strong><span v-if="feature.subclass"> · subclase</span><span v-if="feature.level"> · nivel {{ feature.level }}</span><p v-if="feature.desc">{{ Array.isArray(feature.desc) ? feature.desc.join(' ') : feature.desc }}</p></li></ul>
+                        </div>
+                    </article>
+                        </div>
+                        <p v-else class="sheet-empty">Sin clases registradas.</p>
+                    </section>
+                </div>
+
+                <!-- Columna derecha: equipo, competencias e historia -->
+                <div class="sheet-col sheet-col--side">
                     <section class="sheet-section sheet-inventory">
                         <div class="sheet-section-heading sheet-section-heading--action">
                             <h2>Equipo</h2>
@@ -281,6 +243,27 @@
                             </form>
                         </div>
                     </section>
+
+                    <section class="sheet-section">
+                        <div class="sheet-section-heading"><h2>Historia</h2></div>
+                        <div class="sheet-story-grid">
+                            <article v-for="field in storyFields" :key="field.key" class="sheet-detail-card">
+                                <h3>{{ field.label }}</h3>
+                                <textarea v-if="editMode" rows="3" maxlength="5000" :value="character[field.key] ?? ''" :aria-label="field.label" @change="savePatch({ [field.key]: $event.target.value })"></textarea>
+                                <p v-else>{{ character[field.key] || '—' }}</p>
+                            </article>
+                        </div>
+                        <article v-if="editMode || character.description" class="sheet-description">
+                            <h3>Descripción</h3>
+                            <textarea v-if="editMode" rows="4" maxlength="5000" :value="character.description ?? ''" aria-label="Descripción" @change="savePatch({ description: $event.target.value })"></textarea>
+                            <p v-else>{{ character.description }}</p>
+                        </article>
+                        <article v-if="editMode || character.notes" class="sheet-description">
+                            <h3>Notas</h3>
+                            <textarea v-if="editMode" rows="4" maxlength="10000" :value="character.notes ?? ''" aria-label="Notas" @change="savePatch({ notes: $event.target.value })"></textarea>
+                            <p v-else>{{ character.notes }}</p>
+                        </article>
+                    </section>
                 </div>
             </div>
         </template>
@@ -300,25 +283,48 @@
                     </div>
 
                     <div v-if="sheet.total_level < 20" class="sheet-multiclass-panel">
-                    <h3>Adquirir una nueva clase</h3>
-                    <p>Se comprobarán los requisitos de multiclase de todas las clases del personaje. La nueva clase comenzará en nivel 1.</p>
-                    <div class="sheet-multiclass-controls">
-                        <select v-model="newClassIndex" aria-label="Nueva clase" @change="loadNewClassDetails">
-                            <option value="">Selecciona una clase</option>
-                            <option v-for="item in availableClasses" :key="item.index" :value="item.index" :disabled="character.character_classes?.some(current => current.class_index === item.index)">{{ item.name }}</option>
-                        </select>
-                        <label>Método de puntos de golpe
-                            <select v-model="newClassHpMethod">
-                                <option value="average">Promedio</option>
-                                <option value="manual">Tirada manual</option>
+                        <h3>Nueva clase</h3>
+                        <p v-if="plannedClassNotice" class="info-message">{{ plannedClassNotice }}</p>
+
+                        <div class="sheet-multiclass-controls">
+                            <select v-model="newClassIndex" aria-label="Nueva clase" @change="loadNewClassDetails">
+                                <option value="">Selecciona una clase</option>
+                                <option v-for="item in availableClasses" :key="item.index" :value="item.index" :disabled="character.character_classes?.some(current => current.class_index === item.index)">{{ item.name }}</option>
                             </select>
-                        </label>
-                        <label v-if="newClassHpMethod === 'manual'">Resultado del dado
-                            <select v-model.number="newClassHpRoll"><option v-for="pip in newClassHitDie" :key="pip" :value="pip">{{ pip }}</option></select>
-                        </label>
-                        <button type="button" class="secondary-button" :disabled="!newClassIndex || addingClass" @click="addMulticlassAndClose">{{ addingClass ? 'Añadiendo...' : 'Añadir multiclase' }}</button>
+
+                            <p v-if="multiclassWarningList.length" class="warning-message" role="status">
+                                <strong>Requisitos de multiclase sin cumplir</strong>
+                                <span v-for="warning in multiclassWarningList" :key="warning">{{ warning }}</span>
+                                <small>Es solo un aviso: puedes continuar.</small>
+                            </p>
+
+                            <div v-if="newClassAutomatic.length" class="multiclass-automatic">
+                                <strong>Competencias que obtiene</strong>
+                                <span>{{ newClassAutomatic.join(', ') }}</span>
+                            </div>
+
+                            <fieldset v-for="(group, groupIndex) in newClassChoices" :key="groupIndex" class="choice-group">
+                                <legend>{{ group.label || `Elige ${group.choose}` }} <small>({{ (newClassSelections[groupIndex] || []).length }} / {{ group.choose }})</small></legend>
+                                <div class="choice-options">
+                                    <label v-for="option in group.options" :key="option.index" class="proficiency-option">
+                                        <input type="checkbox" :checked="(newClassSelections[groupIndex] || []).includes(option.index)" :disabled="!(newClassSelections[groupIndex] || []).includes(option.index) && (newClassSelections[groupIndex] || []).length >= group.choose" @change="toggleNewClassChoice(groupIndex, option.index, $event.target.checked)">
+                                        {{ option.name }}
+                                    </label>
+                                </div>
+                            </fieldset>
+
+                            <label>Método de puntos de golpe
+                                <select v-model="newClassHpMethod">
+                                    <option value="average">Promedio</option>
+                                    <option value="manual">Tirada manual</option>
+                                </select>
+                            </label>
+                            <label v-if="newClassHpMethod === 'manual'">Resultado del dado
+                                <select v-model.number="newClassHpRoll"><option v-for="pip in newClassHitDie" :key="pip" :value="pip">{{ pip }}</option></select>
+                            </label>
+                            <button type="button" class="secondary-button" :disabled="!newClassIndex || addingClass || !newClassChoicesComplete" @click="addMulticlassAndClose">{{ addingClass ? 'Añadiendo...' : 'Añadir clase' }}</button>
+                        </div>
                     </div>
-                </div>
                     <p v-if="progressionError" class="error-message" role="alert">{{ progressionError }}</p>
                 </section>
             </div>
@@ -334,8 +340,9 @@
             @close="activeLevelUpClass = null"
             @completed="completeLevelUp"
         />
+
         <Transition name="modal">
-            <JoinCampaignModal v-if="showJoin && character" :character-id="character.id" :character-name="character.name" @close="showJoin = false" @sent="onJoinSent" />
+            <AddSpellModal v-if="showAddSpell && character" :character-id="character.id" :classes="character.character_classes || []" :owned="(character.spells || []).map((spell) => spell.spell_index)" @close="showAddSpell = false" @saved="onSpellAdded" />
         </Transition>
 
         <Transition name="modal">
@@ -346,17 +353,19 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue';
-import { RouterLink, useRoute } from 'vue-router';
+import { RouterLink, useRoute, useRouter } from 'vue-router';
 import LevelUpWizard from '../components/LevelUpWizard.vue';
 import AppIcon from '../components/AppIcon.vue';
 import AddItemModal from '../components/AddItemModal.vue';
-import JoinCampaignModal from '../components/JoinCampaignModal.vue';
+import AddSpellModal from '../components/AddSpellModal.vue';
 import AttackModal from '../components/AttackModal.vue';
 import api from '../services/api';
 import { getCurrentUser } from '../services/auth';
 import { rollD20, rollDice } from '../services/dice';
+import { multiclassWarnings } from '../services/multiclass';
 
 const route = useRoute();
+const router = useRouter();
 const character = ref(null);
 const me = ref(null);
 
@@ -376,7 +385,7 @@ const addingClass = ref(false);
 const levelingClass = ref(null);
 const showLevelChooser = ref(false);
 const showAddItem = ref(false);
-const showJoin = ref(false);
+const showAddSpell = ref(false);
 const showAttack = ref(false);
 const editingAttack = ref(null);
 const editMode = ref(false);
@@ -467,29 +476,23 @@ async function loadClassFeatures() {
 }
 
 async function loadClassMagic() {
-    const result = {};
-    for (const characterClass of character.value?.character_classes || []) {
+    const entries = await Promise.all((character.value?.character_classes || []).map(async (characterClass) => {
+        hpMethods.value[characterClass.id] = 'average';
+        hpRolls.value[characterClass.id] = Math.floor(Number(characterClass.hit_die) / 2);
+
         try {
-            const subclassResponse = await api.get(`/characters/${character.value.id}/classes/${characterClass.id}/subclass-options`);
-            const spellResponse = await api.get(`/characters/${character.value.id}/classes/${characterClass.id}/spell-options`);
-            const selected = spellResponse.data.selected || [];
-            result[characterClass.id] = {
-                subclasses: subclassResponse.data.subclasses || [],
-                subclass_level: subclassResponse.data.subclass_level || 3,
+            const response = await api.get(`/characters/${character.value.id}/classes/${characterClass.id}/subclass-options`);
+            return [characterClass.id, {
+                subclasses: response.data.subclasses || [],
+                subclass_level: response.data.subclass_level || 3,
                 pendingSubclass: '',
-                spellcasting: !!spellResponse.data.spellcasting,
-                spell_type: spellResponse.data.spell_type || (['bard', 'ranger', 'sorcerer', 'warlock'].includes(characterClass.class_index) ? 'known' : 'prepared'),
-                spells: spellResponse.data.spells || [],
-                selectedSpells: selected.map(item => item.spell_index),
-                preparedSpells: selected.filter(item => item.is_prepared).map(item => item.spell_index),
-            };
-            hpMethods.value[characterClass.id] = 'average';
-            hpRolls.value[characterClass.id] = Math.floor(Number(characterClass.hit_die) / 2);
+            }];
         } catch (_) {
-            result[characterClass.id] = { subclasses: [], spellcasting: false, spells: [], selectedSpells: [], preparedSpells: [] };
+            return [characterClass.id, { subclasses: [], pendingSubclass: '' }];
         }
-    }
-    classMagic.value = result;
+    }));
+
+    classMagic.value = Object.fromEntries(entries);
 }
 
 async function loadSpellcasting() {
@@ -512,18 +515,6 @@ async function saveSubclass(characterClass) {
     } finally { savingSubclass.value = null; }
 }
 
-async function saveSpells(characterClass) {
-    const state = classMagic.value[characterClass.id];
-    savingSpells.value = characterClass.id;
-    progressionError.value = '';
-    try {
-        const spells = state.selectedSpells.map(index => ({ index, prepared: state.spell_type !== 'known' && state.preparedSpells.includes(index) }));
-        await api.put(`/characters/${character.value.id}/classes/${characterClass.id}/spells`, { spells });
-        await loadCharacter();
-    } catch (err) {
-        progressionError.value = Object.values(err.response?.data?.errors || {}).flat()[0] || err.response?.data?.message || 'No se pudieron guardar los conjuros.';
-    } finally { savingSpells.value = null; }
-}
 
 async function changeSlotUse(slot, delta) {
     const used = Number(slot.used_slots) + delta;
@@ -544,10 +535,49 @@ async function loadAvailableClasses() {
     }
 }
 
+const newClassDetails = ref(null);
+const newClassSelections = ref({});
+const plannedClassNotice = ref('');
+
+const optionsOf = (choice) => (choice.from?.options ?? choice.from?.option_set?.options ?? [])
+    .map((option) => option.item ?? option)
+    .filter((item) => item?.index)
+    .map((item) => ({ index: item.index, name: item.name || item.index }));
+
+// Elecciones de competencias de la multiclase (p. ej. el bardo: una habilidad y un instrumento).
+const newClassChoices = computed(() => (newClassDetails.value?.multi_classing?.proficiency_choices || [])
+    .map((choice) => ({ choose: Number(choice.choose || 0), label: choice.desc, options: optionsOf(choice) }))
+    .filter((group) => group.choose > 0));
+
+const newClassAutomatic = computed(() => (newClassDetails.value?.multi_classing?.proficiencies || [])
+    .map((entry) => entry.name).filter(Boolean));
+
+const newClassChoicesComplete = computed(() => newClassChoices.value
+    .every((group, index) => (newClassSelections.value[index] || []).length === group.choose));
+
+function toggleNewClassChoice(groupIndex, optionIndex, checked) {
+    const current = newClassSelections.value[groupIndex] || [];
+    newClassSelections.value = {
+        ...newClassSelections.value,
+        [groupIndex]: checked ? [...current, optionIndex] : current.filter((item) => item !== optionIndex),
+    };
+}
+
+// Aviso (no prohibición) de los requisitos de característica para la multiclase.
+const multiclassWarningList = computed(() => (sheet.value && newClassIndex.value
+    ? multiclassWarnings(
+        [...(character.value?.character_classes || []).map((entry) => entry.class_index), newClassIndex.value],
+        (key) => sheet.value.ability_scores[key]?.effective_score,
+    )
+    : []));
+
 async function loadNewClassDetails() {
+    newClassSelections.value = {};
+    newClassDetails.value = null;
     if (!newClassIndex.value) return;
     try {
         const response = await api.get(`/dnd/classes/${newClassIndex.value}`);
+        newClassDetails.value = response.data;
         newClassHitDie.value = Number(response.data.hit_die || 8);
         newClassHpRoll.value = Math.floor(newClassHitDie.value / 2);
     } catch (_) {
@@ -555,7 +585,6 @@ async function loadNewClassDetails() {
         newClassHpRoll.value = 4;
     }
 }
-
 async function addMulticlass() {
     if (!newClassIndex.value) return;
     addingClass.value = true;
@@ -563,10 +592,13 @@ async function addMulticlass() {
     try {
         await api.post(`/characters/${character.value.id}/classes`, {
             class_index: newClassIndex.value,
+            class_proficiencies: Object.values(newClassSelections.value).flat(),
             hp_method: newClassHpMethod.value,
             ...(newClassHpMethod.value === 'manual' ? { base_hp_gained: newClassHpRoll.value } : {}),
         });
         newClassIndex.value = '';
+        newClassDetails.value = null;
+        newClassSelections.value = {};
         await loadCharacter();
     } catch (err) {
         progressionError.value = Object.values(err.response?.data?.errors || {}).flat()[0]
@@ -594,7 +626,12 @@ function chooseLevelUpClass(characterClass) {
 async function addMulticlassAndClose() {
     progressionError.value = '';
     await addMulticlass();
-    if (!progressionError.value) showLevelChooser.value = false;
+    if (!progressionError.value) {
+        showLevelChooser.value = false;
+        plannedClassNotice.value = '';
+        // Si venía del reparto de niveles elegido al crear, sigue con el siguiente nivel.
+        continueLevelUps();
+    }
 }
 
 // Exporta los datos del personaje (sin datos privados del usuario) a un archivo JSON.
@@ -622,7 +659,7 @@ function exportJson() {
 // Inventario ---------------------------------------------------------------
 async function inventoryAction(request) {
     inventoryError.value = '';
-    try { await request(); await loadCharacter(true); }
+    try { await request(); await refreshCharacter(); }
     catch (err) { inventoryError.value = err.response?.data?.message || 'No se pudo actualizar el inventario.'; }
 }
 
@@ -634,7 +671,7 @@ const removeItem = (item) => (window.confirm(`¿Eliminar «${item.item_name}» d
 
 async function onItemSaved() {
     showAddItem.value = false;
-    await loadCharacter(true);
+    await refreshCharacter();
 }
 
 function openLevelUpWizard(characterClass) {
@@ -642,9 +679,49 @@ function openLevelUpWizard(characterClass) {
     activeLevelUpClass.value = characterClass;
 }
 
+// Niveles que faltan hasta el nivel elegido al crear el personaje.
+const pendingLevels = computed(() => {
+    const target = character.value?.target_level;
+    return target && sheet.value && sheet.value.total_level < target ? target - sheet.value.total_level : 0;
+});
+
+// Si quedan niveles por subir, se encadena el asistente siguiendo el reparto elegido al crear.
+function continueLevelUps(classId = null) {
+    if (!isOwner.value || !pendingLevels.value) return;
+
+    const classes = character.value.character_classes || [];
+
+    for (const entry of character.value.level_plan || []) {
+        const current = classes.find((item) => item.class_index === entry.class_index);
+
+        // Clase del reparto que todavía no tiene el personaje: se añade primero.
+        if (!current) {
+            openLevelChooser();
+            newClassIndex.value = entry.class_index;
+            const name = availableClasses.value.find((item) => item.index === entry.class_index)?.name || entry.class_index;
+            plannedClassNotice.value = `Pendiente del reparto: ${name}`;
+            loadNewClassDetails();
+            return;
+        }
+
+        if (current.level < entry.level && current.level < 20) {
+            openLevelUpWizard(current);
+            return;
+        }
+    }
+
+    const next = classes.find((entry) => entry.id === classId && entry.level < 20)
+        || classes.find((entry) => entry.is_primary && entry.level < 20)
+        || classes.find((entry) => entry.level < 20);
+
+    if (next) openLevelUpWizard(next);
+}
+
 async function completeLevelUp() {
+    const classId = activeLevelUpClass.value?.id;
     activeLevelUpClass.value = null;
     await loadCharacter();
+    continueLevelUps(classId);
 }
 
 async function levelUpClass(characterClass) {
@@ -675,13 +752,30 @@ async function levelUpClass(characterClass) {
 }
 
 onMounted(async () => {
-    getCurrentUser().then((user) => { me.value = user; }).catch(() => {});
-    await Promise.all([loadCharacter(), loadAvailableClasses()]);
+    const meLoaded = getCurrentUser().then((user) => { me.value = user; }).catch(() => {});
+    await Promise.all([loadCharacter(), loadAvailableClasses(), meLoaded]);
+
+    // Recién creado en un nivel superior al 1: empieza la subida de nivel paso a paso.
+    if (route.query.levelup === '1') {
+        await router.replace({ query: {} });
+        continueLevelUps();
+    }
 });
 
 // Edición en la propia ficha ------------------------------------------------
 const numberOrNull = (event) => (event.target.value === '' ? null : Number(event.target.value));
 const numberOrZero = (event) => (event.target.value === '' ? 0 : Number(event.target.value));
+
+async function deleteCharacter() {
+    if (!window.confirm(`¿Eliminar a «${character.value.name}» definitivamente? No se puede deshacer.`)) return;
+    actionError.value = '';
+    try {
+        await api.delete(`/characters/${character.value.id}`);
+        await router.replace('/characters');
+    } catch (err) {
+        fail(err, 'No se pudo eliminar el personaje.');
+    }
+}
 
 function toggleEdit() {
     editMode.value = !editMode.value;
@@ -692,14 +786,31 @@ function fail(err, fallback) {
     actionError.value = Object.values(err.response?.data?.errors || {}).flat().join(' ') || err.response?.data?.message || fallback;
 }
 
-async function savePatch(patch) {
-    actionError.value = '';
+// Las ediciones se encadenan para que no se pisen entre sí y solo se recarga
+// la ficha (sin volver a pedir clases ni conjuros al catálogo).
+let saveChain = Promise.resolve();
+const enqueue = (task) => { saveChain = saveChain.then(task, task); return saveChain; };
+
+async function refreshCharacter() {
     try {
-        await api.patch(`/characters/${character.value.id}/details`, patch);
+        const response = await api.get(`/characters/${route.params.id}`);
+        character.value = response.data;
+        sheet.value = response.data.sheet;
     } catch (err) {
-        fail(err, 'No se pudo guardar el cambio.');
+        fail(err, 'No se pudo actualizar la ficha.');
     }
-    await loadCharacter(true);
+}
+
+function savePatch(patch) {
+    actionError.value = '';
+    return enqueue(async () => {
+        try {
+            await api.patch(`/characters/${character.value.id}/details`, patch);
+        } catch (err) {
+            fail(err, 'No se pudo guardar el cambio.');
+        }
+        await refreshCharacter();
+    });
 }
 
 function changeHp(delta) {
@@ -708,17 +819,41 @@ function changeHp(delta) {
     savePatch({ current_hit_points: Math.min(max, Math.max(0, current + delta)) });
 }
 
+const SKILL_ABILITY = {
+    acrobatics: 'dexterity', 'animal-handling': 'wisdom', arcana: 'intelligence', athletics: 'strength',
+    deception: 'charisma', history: 'intelligence', insight: 'wisdom', intimidation: 'charisma',
+    investigation: 'intelligence', medicine: 'wisdom', nature: 'intelligence', perception: 'wisdom',
+    performance: 'charisma', persuasion: 'charisma', religion: 'intelligence', 'sleight-of-hand': 'dexterity',
+    stealth: 'dexterity', survival: 'wisdom',
+};
+const ABILITY_ORDER = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
+
+// Una columna por característica: su salvación y sus habilidades en orden alfabético.
+const abilityColumns = computed(() => {
+    if (!sheet.value) return [];
+    const skills = Object.values(sheet.value.skills || {});
+
+    return ABILITY_ORDER.map((key) => ({
+        key,
+        ...sheet.value.ability_scores[key],
+        save: sheet.value.saving_throws[key],
+        skills: skills.filter((skill) => SKILL_ABILITY[skill.index] === key).sort((a, b) => a.name.localeCompare(b.name, 'es')),
+    }));
+});
+
 // Competencias: ★ competente, ★★ pericia (doble competencia).
 const stars = (level, editable) => (level >= 2 ? '★★' : level === 1 ? '★' : (editable ? '☆' : ''));
 
-async function setProficiencyLevel(category, index, level) {
+function setProficiencyLevel(category, index, level) {
     actionError.value = '';
-    try {
-        await api.put(`/characters/${character.value.id}/proficiency-level`, { category, index, level });
-    } catch (err) {
-        fail(err, 'No se pudo cambiar la competencia.');
-    }
-    await loadCharacter(true);
+    return enqueue(async () => {
+        try {
+            await api.put(`/characters/${character.value.id}/proficiency-level`, { category, index, level });
+        } catch (err) {
+            fail(err, 'No se pudo cambiar la competencia.');
+        }
+        await refreshCharacter();
+    });
 }
 
 function onSaveClick(key, save) {
@@ -739,7 +874,7 @@ async function addProficiency(category) {
     } catch (err) {
         fail(err, 'No se pudo añadir la competencia.');
     }
-    await loadCharacter(true);
+    await refreshCharacter();
 }
 
 async function removeProficiency(item) {
@@ -749,7 +884,7 @@ async function removeProficiency(item) {
     } catch (err) {
         fail(err, 'No se pudo quitar la competencia.');
     }
-    await loadCharacter(true);
+    await refreshCharacter();
 }
 
 // Equipo ---------------------------------------------------------------------
@@ -801,7 +936,7 @@ function openAttack(attack = null) {
 
 async function onAttackSaved() {
     showAttack.value = false;
-    await loadCharacter(true);
+    await refreshCharacter();
 }
 
 async function removeAttack(attack) {
@@ -812,23 +947,62 @@ async function removeAttack(attack) {
     } catch (err) {
         fail(err, 'No se pudo eliminar el ataque.');
     }
-    await loadCharacter(true);
+    await refreshCharacter();
 }
 
 // Magia: espacios (círculos) y listado por nivel ---------------------------------
 const slotRows = computed(() => (spellcastingSummary.value?.saved_slots || [])
     .filter((slot) => slot.total_slots > 0)
-    .map((slot) => ({ ...slot, available: slot.total_slots - slot.used_slots, label: slot.slot_type === 'pact' ? `Pacto ${slot.spell_level}` : `Nv ${slot.spell_level}` }))
+    .map((slot) => ({ ...slot, label: slot.slot_type === 'pact' ? `Pacto ${slot.spell_level}` : `Nv ${slot.spell_level}` }))
     .sort((a, b) => a.spell_level - b.spell_level));
 
-async function setSlotAvailable(slot, available) {
-    actionError.value = '';
+// Cada círculo es un bit: se puede tachar cualquiera, sin seguir un orden.
+const isSlotUsed = (slot, index) => ((slot.used_mask ?? 0) >> index) & 1;
+
+async function toggleSlot(slot, index) {
+    const target = (spellcastingSummary.value?.saved_slots || []).find((entry) => entry.id === slot.id);
+    if (!target) return;
+
+    const previous = target.used_mask ?? 0;
+    const mask = previous ^ (1 << index);
+
+    // Cambio inmediato en pantalla; se revierte si el servidor falla.
+    target.used_mask = mask;
     try {
-        await api.patch(`/characters/${character.value.id}/spell-slots/${slot.id}`, { used_slots: slot.total_slots - available });
-        await loadSpellcasting();
+        await api.patch(`/characters/${character.value.id}/spell-slots/${slot.id}`, { used_mask: mask });
     } catch (err) {
+        target.used_mask = previous;
         fail(err, 'No se pudo actualizar el espacio de conjuro.');
     }
+}
+
+// Solo se marca «preparado» en clases que preparan conjuros y en los añadidos a mano.
+const canPrepare = (spell) => spell.spell_level > 0 && (spell.spell_type === 'prepared' || !!spell.is_exception);
+
+async function togglePrepared(spell) {
+    actionError.value = '';
+    try {
+        await api.patch(`/characters/${character.value.id}/spells/${spell.id}`, { is_prepared: !spell.is_prepared });
+    } catch (err) {
+        fail(err, 'No se pudo cambiar el conjuro.');
+    }
+    await refreshCharacter();
+}
+
+async function removeSpell(spell) {
+    if (!window.confirm(`¿Quitar «${spell.spell_name}»?`)) return;
+    actionError.value = '';
+    try {
+        await api.delete(`/characters/${character.value.id}/spells/${spell.id}`);
+    } catch (err) {
+        fail(err, 'No se pudo quitar el conjuro.');
+    }
+    await refreshCharacter();
+}
+
+async function onSpellAdded() {
+    showAddSpell.value = false;
+    await refreshCharacter();
 }
 
 const spellGroups = computed(() => {
@@ -847,9 +1021,4 @@ const spellGroups = computed(() => {
         }));
 });
 
-function onJoinSent(message) {
-    showJoin.value = false;
-    flash.value = message;
-    setTimeout(() => { flash.value = ''; }, 7000);
-}
 </script>

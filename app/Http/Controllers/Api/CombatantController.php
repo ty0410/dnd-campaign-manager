@@ -24,7 +24,7 @@ class CombatantController extends Controller
         }
 
         $hasAccess = $request->user()
-            ->campaigns()
+            ->masteredCampaigns()
             ->where('campaigns.id', $encounter->campaign_id)
             ->exists();
 
@@ -55,7 +55,7 @@ class CombatantController extends Controller
         }
 
         $hasAccess = $request->user()
-            ->campaigns()
+            ->masteredCampaigns()
             ->where('campaigns.id', $encounter->campaign_id)
             ->exists();
 
@@ -132,7 +132,7 @@ class CombatantController extends Controller
         }
 
         $hasAccess = $request->user()
-            ->campaigns()
+            ->masteredCampaigns()
             ->where('campaigns.id', $combatant->encounter->campaign_id)
             ->exists();
 
@@ -159,7 +159,7 @@ class CombatantController extends Controller
         }
 
         $hasAccess = $request->user()
-            ->campaigns()
+            ->masteredCampaigns()
             ->where('campaigns.id', $combatant->encounter->campaign_id)
             ->exists();
 
@@ -233,7 +233,7 @@ class CombatantController extends Controller
         }
 
         $hasAccess = $request->user()
-            ->campaigns()
+            ->masteredCampaigns()
             ->where('campaigns.id', $combatant->encounter->campaign_id)
             ->exists();
 

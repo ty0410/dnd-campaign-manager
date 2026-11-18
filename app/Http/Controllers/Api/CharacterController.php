@@ -50,6 +50,10 @@ class CharacterController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'race' => ['nullable', 'string', 'max:255'],
             'level' => ['required', 'integer', 'min:1', 'max:20'],
+            // Reparto de niveles por clase (la principal primero); el total no pasa de 20.
+            'level_plan' => ['sometimes', 'nullable', 'array', 'min:1', 'max:12'],
+            'level_plan.*.class_index' => ['required_with:level_plan', 'string', 'max:100'],
+            'level_plan.*.level' => ['required_with:level_plan', 'integer', 'min:1', 'max:20'],
             'description' => ['nullable', 'string'],
 
             'personality_trait' => [
@@ -80,6 +84,26 @@ class CharacterController extends Controller
             $abilityData
         );
 
+        // El personaje se crea en nivel 1 y sube paso a paso (puntos de golpe, subclase,
+        // mejoras de característica y dotes) hasta el nivel pedido con la subida de nivel.
+        $plan = collect($validated['level_plan'] ?? [])
+            ->map(fn ($entry) => ['class_index' => (string) $entry['class_index'], 'level' => (int) $entry['level']])
+            ->values();
+
+        if ($plan->isNotEmpty()) {
+            if ($plan->pluck('class_index')->unique()->count() !== $plan->count()
+                || $plan->first()['class_index'] !== ($validated['class_index'] ?? null)
+                || $plan->sum('level') > 20) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'level_plan' => ['El reparto de niveles no es válido: la clase principal va primero, sin repetir clases y con un total máximo de 20.'],
+                ]);
+            }
+        }
+
+        $targetLevel = $plan->isNotEmpty() ? (int) $plan->sum('level') : (int) $validated['level'];
+        $levelPlan = $plan->isNotEmpty() && $targetLevel > 1 ? $plan->all() : null;
+        $validated['level'] = 1;
+
         $proficiencyBonus = $this->calculateProficiencyBonus(
             (int) $validated['level']
         );
@@ -95,6 +119,8 @@ class CharacterController extends Controller
             'background_index' => $validated['background_index'] ?? null,
             'background' => $validated['background'] ?? null,
 
+            'target_level' => $targetLevel > 1 ? $targetLevel : null,
+            'level_plan' => $levelPlan,
             'level' => $validated['level'],
             'proficiency_bonus' => $proficiencyBonus,
             'description' => $validated['description'] ?? null,
@@ -185,6 +211,10 @@ class CharacterController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'race' => ['nullable', 'string', 'max:255'],
             'level' => ['required', 'integer', 'min:1', 'max:20'],
+            // Reparto de niveles por clase (la principal primero); el total no pasa de 20.
+            'level_plan' => ['sometimes', 'nullable', 'array', 'min:1', 'max:12'],
+            'level_plan.*.class_index' => ['required_with:level_plan', 'string', 'max:100'],
+            'level_plan.*.level' => ['required_with:level_plan', 'integer', 'min:1', 'max:20'],
             'description' => ['nullable', 'string'],
 
             'personality_trait' => [
@@ -215,6 +245,26 @@ class CharacterController extends Controller
             $abilityData
         );
 
+        // El personaje se crea en nivel 1 y sube paso a paso (puntos de golpe, subclase,
+        // mejoras de característica y dotes) hasta el nivel pedido con la subida de nivel.
+        $plan = collect($validated['level_plan'] ?? [])
+            ->map(fn ($entry) => ['class_index' => (string) $entry['class_index'], 'level' => (int) $entry['level']])
+            ->values();
+
+        if ($plan->isNotEmpty()) {
+            if ($plan->pluck('class_index')->unique()->count() !== $plan->count()
+                || $plan->first()['class_index'] !== ($validated['class_index'] ?? null)
+                || $plan->sum('level') > 20) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'level_plan' => ['El reparto de niveles no es válido: la clase principal va primero, sin repetir clases y con un total máximo de 20.'],
+                ]);
+            }
+        }
+
+        $targetLevel = $plan->isNotEmpty() ? (int) $plan->sum('level') : (int) $validated['level'];
+        $levelPlan = $plan->isNotEmpty() && $targetLevel > 1 ? $plan->all() : null;
+        $validated['level'] = 1;
+
         $proficiencyBonus = $this->calculateProficiencyBonus(
             (int) $validated['level']
         );
@@ -223,7 +273,9 @@ class CharacterController extends Controller
             $request,
             $campaign,
             $validated,
-            $proficiencyBonus
+            $proficiencyBonus,
+            $targetLevel,
+            $levelPlan
         ) {
             $character = Character::create([
                 'campaign_id' => null,
@@ -236,7 +288,9 @@ class CharacterController extends Controller
                 'background_index' => $validated['background_index'] ?? null,
                 'background' => $validated['background'] ?? null,
 
-                'level' => $validated['level'],
+                'target_level' => $targetLevel > 1 ? $targetLevel : null,
+            'level_plan' => $levelPlan,
+            'level' => $validated['level'],
                 'proficiency_bonus' => $proficiencyBonus,
                 'description' => $validated['description'] ?? null,
 
@@ -637,6 +691,10 @@ class CharacterController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'race' => ['nullable', 'string', 'max:255'],
             'level' => ['required', 'integer', 'min:1', 'max:20'],
+            // Reparto de niveles por clase (la principal primero); el total no pasa de 20.
+            'level_plan' => ['sometimes', 'nullable', 'array', 'min:1', 'max:12'],
+            'level_plan.*.class_index' => ['required_with:level_plan', 'string', 'max:100'],
+            'level_plan.*.level' => ['required_with:level_plan', 'integer', 'min:1', 'max:20'],
             'description' => ['nullable', 'string'],
 
             'personality_trait' => [

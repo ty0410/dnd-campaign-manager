@@ -61,24 +61,55 @@
                     </div>
                 </section>
 
-                <!-- 3. Clase y nivel -->
+                <!-- 3. Clases -->
                 <section class="creator-section">
                     <header class="creator-section-header">
                         <span class="creator-step">3</span>
-                        <div><h2>Clase y nivel</h2><p>Si empiezas por encima del nivel 1, todos esos niveles se asignan a esta clase.</p></div>
+                        <div><h2>Clases</h2><p>La principal empieza en nivel 1; añade niveles y otras clases si quieres.</p></div>
                     </header>
-                    <div class="creator-grid">
-                        <div class="form-group">
-                            <label for="character-class">Clase principal</label>
-                            <select id="character-class" v-model="newCharacter.class_index" @change="onClassChange" required>
-                                <option value="">Selecciona una clase</option>
-                                <option v-for="item in classes" :key="item.index" :value="item.index">{{ item.name }}</option>
-                            </select>
+
+                    <div class="class-plan">
+                        <div class="class-plan-row">
+                            <div class="form-group">
+                                <label for="character-class">Clase principal</label>
+                                <select id="character-class" v-model="newCharacter.class_index" @change="onClassChange" required>
+                                    <option value="">Selecciona una clase</option>
+                                    <option v-for="item in classes" :key="item.index" :value="item.index" :disabled="extraClasses.some((entry) => entry.class_index === item.index)">{{ item.name }}</option>
+                                </select>
+                            </div>
+                            <div class="class-level" role="group" aria-label="Nivel de la clase principal">
+                                <button type="button" class="icon-button" :disabled="mainLevel <= 1" aria-label="Bajar un nivel" @click="mainLevel -= 1">−</button>
+                                <output>Nivel {{ mainLevel }}</output>
+                                <button type="button" class="icon-button" :disabled="totalLevel >= 20" aria-label="Subir un nivel" @click="mainLevel += 1">+</button>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="character-level">Nivel total</label>
-                            <input id="character-level" v-model.number="newCharacter.level" type="number" min="1" max="20" required />
+
+                        <div v-for="(entry, index) in extraClasses" :key="index" class="class-plan-row">
+                            <div class="form-group">
+                                <label :for="`extra-class-${index}`">Otra clase</label>
+                                <select :id="`extra-class-${index}`" v-model="entry.class_index">
+                                    <option value="">Selecciona una clase</option>
+                                    <option v-for="item in classes" :key="item.index" :value="item.index" :disabled="item.index === newCharacter.class_index || extraClasses.some((other, i) => i !== index && other.class_index === item.index)">{{ item.name }}</option>
+                                </select>
+                            </div>
+                            <div class="class-level" role="group" :aria-label="`Nivel de la clase ${index + 2}`">
+                                <button type="button" class="icon-button" :disabled="entry.level <= 1" aria-label="Bajar un nivel" @click="entry.level -= 1">−</button>
+                                <output>Nivel {{ entry.level }}</output>
+                                <button type="button" class="icon-button" :disabled="totalLevel >= 20" aria-label="Subir un nivel" @click="entry.level += 1">+</button>
+                            </div>
+                            <button type="button" class="icon-button danger" :aria-label="`Quitar la clase ${index + 2}`" @click="extraClasses.splice(index, 1)"><AppIcon name="x" /></button>
                         </div>
+
+                        <div class="class-plan-footer">
+                            <button type="button" class="secondary-button" :disabled="totalLevel >= 20 || !newCharacter.class_index || extraClasses.length + 1 >= classes.length" @click="extraClasses.push({ class_index: '', level: 1 })"><AppIcon name="plus" /> Añadir otra clase</button>
+                            <span class="class-total">Nivel total {{ totalLevel }}</span>
+                        </div>
+
+                        <p v-if="classWarnings.length" class="warning-message" role="status">
+                            <strong>Requisitos de multiclase sin cumplir</strong>
+                            <span v-for="warning in classWarnings" :key="warning">{{ warning }}</span>
+                            <small>Es solo un aviso: puedes continuar.</small>
+                        </p>
                     </div>
 
                     <p v-if="loadingClassDetails" class="muted">Cargando competencias de clase...</p>
@@ -140,7 +171,7 @@
                             <span v-for="value in STANDARD_ARRAY" :key="value" class="pool-chip" :class="{ 'is-used': !remainingStandard.includes(value) }">{{ value }}</span>
                         </div>
                         <div class="pool-actions">
-                            <button type="button" class="secondary-button" @click="suggestStandardArray">Reparto sugerido</button>
+                            <button type="button" class="secondary-button" :disabled="!newCharacter.class_index" title="Reparto rápido recomendado para la clase en el manual del jugador" @click="suggestStandardArray">Recomendado por clase</button>
                             <button type="button" class="secondary-button" @click="clearStandardArray">Vaciar</button>
                         </div>
                     </div>
@@ -265,9 +296,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from "vue";
+import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import api from "../services/api";
+import AppIcon from "../components/AppIcon.vue";
+import { multiclassWarnings } from "../services/multiclass";
 
 const router = useRouter();
 const route = useRoute();
@@ -292,6 +325,11 @@ const loadingClassDetails = ref(false);
 const classLoadingError = ref("");
 const availableSubraces = ref([]);
 const loadingSubraces = ref(false);
+
+// Reparto de niveles: la clase principal (nivel mínimo 1) y, opcionalmente, otras clases.
+const mainLevel = ref(1);
+const extraClasses = ref([]);
+const totalLevel = computed(() => mainLevel.value + extraClasses.value.reduce((sum, entry) => sum + entry.level, 0));
 
 const abilities = [
     { key: "strength", bonus: "strength_bonus", label: "Fuerza" },
@@ -436,9 +474,32 @@ const remainingStandard = computed(() => {
 const isStandardValueTaken = (value, key) =>
     abilities.some((ability) => ability.key !== key && newCharacter.value[ability.key] === value);
 
+// Prioridad de características por clase (reparto rápido del manual del jugador).
+const CLASS_PRIORITY = {
+    barbarian: ["strength", "constitution", "dexterity", "wisdom", "charisma", "intelligence"],
+    bard: ["charisma", "dexterity", "constitution", "wisdom", "intelligence", "strength"],
+    cleric: ["wisdom", "constitution", "strength", "charisma", "dexterity", "intelligence"],
+    druid: ["wisdom", "constitution", "dexterity", "intelligence", "charisma", "strength"],
+    fighter: ["strength", "constitution", "dexterity", "wisdom", "charisma", "intelligence"],
+    monk: ["dexterity", "wisdom", "constitution", "strength", "intelligence", "charisma"],
+    paladin: ["strength", "charisma", "constitution", "wisdom", "dexterity", "intelligence"],
+    ranger: ["dexterity", "wisdom", "constitution", "strength", "intelligence", "charisma"],
+    rogue: ["dexterity", "intelligence", "charisma", "constitution", "wisdom", "strength"],
+    sorcerer: ["charisma", "constitution", "dexterity", "wisdom", "intelligence", "strength"],
+    warlock: ["charisma", "constitution", "dexterity", "wisdom", "intelligence", "strength"],
+    wizard: ["intelligence", "constitution", "dexterity", "wisdom", "charisma", "strength"],
+};
+
+// Reparte 15, 14, 13, 12, 10 y 8 según la prioridad de la clase elegida.
 const suggestStandardArray = () => {
-    abilities.forEach((ability, index) => {
-        newCharacter.value[ability.key] = STANDARD_ARRAY[index];
+    const priority = CLASS_PRIORITY[newCharacter.value.class_index];
+
+    if (!priority) {
+        return;
+    }
+
+    priority.forEach((key, position) => {
+        newCharacter.value[key] = STANDARD_ARRAY[position];
     });
 };
 
@@ -600,6 +661,16 @@ const onClassChange = async () => {
     }
 };
 
+// Reparto enviado al servidor: la principal primero; solo con más de un nivel.
+function planForRequest() {
+    if (totalLevel.value <= 1) return undefined;
+
+    return [
+        { class_index: newCharacter.value.class_index, level: mainLevel.value },
+        ...extraClasses.value.filter((entry) => entry.class_index).map((entry) => ({ class_index: entry.class_index, level: entry.level })),
+    ];
+}
+
 const createCharacter = async () => {
     if (creatingCharacter.value || characterCreated.value) {
         return;
@@ -656,7 +727,8 @@ const createCharacter = async () => {
             class_index: newCharacter.value.class_index,
             class_proficiencies: selectedClassProficiencies.value.flat(),
 
-            level: newCharacter.value.level,
+            level: totalLevel.value,
+            level_plan: planForRequest(),
             description: newCharacter.value.description || null,
 
             personality_trait: newCharacter.value.personality_trait || null,
@@ -725,6 +797,12 @@ const createCharacter = async () => {
         const campaignId = route.query.campaign_id;
         if (campaignId) {
             await api.post(`/campaigns/${campaignId}/characters/${characterId}`);
+        }
+
+        // Por encima del nivel 1 se sigue con la subida de nivel paso a paso.
+        if (Number(newCharacter.value.level) > 1) {
+            await router.push({ name: "character-detail", params: { id: characterId }, query: { levelup: "1" } });
+        } else if (campaignId) {
             await router.push(`/campaigns/${campaignId}`);
         } else {
             await router.push("/characters");
@@ -746,6 +824,15 @@ const createCharacter = async () => {
         creatingCharacter.value = false;
     }
 };
+
+// El nivel total se refleja en el resumen y se envía como nivel objetivo.
+watch(totalLevel, (value) => { newCharacter.value.level = value; }, { immediate: true });
+
+// Aviso (no prohibición) de los requisitos de característica de la multiclase.
+const classWarnings = computed(() => multiclassWarnings(
+    [newCharacter.value.class_index, ...extraClasses.value.map((entry) => entry.class_index)],
+    (key) => Number(newCharacter.value[key] || 0) + Number(newCharacter.value[`${key}_bonus`] || 0),
+));
 
 // Resumen en vivo de lo elegido hasta ahora.
 const nameOf = (list, index) => list.find((entry) => entry.index === index)?.name || '';

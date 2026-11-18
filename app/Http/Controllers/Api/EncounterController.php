@@ -12,7 +12,7 @@ class EncounterController extends Controller
     public function index(Request $request, $campaignId)
     {
         $campaign = $request->user()
-            ->campaigns()
+            ->masteredCampaigns()
             ->find($campaignId);
 
         if (!$campaign) {
@@ -32,7 +32,7 @@ class EncounterController extends Controller
     public function store(Request $request, $campaignId)
     {
         $campaign = $request->user()
-            ->campaigns()
+            ->masteredCampaigns()
             ->find($campaignId);
 
         if (!$campaign) {
@@ -91,7 +91,7 @@ class EncounterController extends Controller
         }
 
         $hasAccess = $request->user()
-            ->campaigns()
+            ->masteredCampaigns()
             ->where('campaigns.id', $encounter->campaign_id)
             ->exists();
 
@@ -115,7 +115,7 @@ class EncounterController extends Controller
         }
 
         $hasAccess = $request->user()
-            ->campaigns()
+            ->masteredCampaigns()
             ->where('campaigns.id', $encounter->campaign_id)
             ->exists();
 
@@ -171,7 +171,7 @@ class EncounterController extends Controller
         }
 
         $hasAccess = $request->user()
-            ->campaigns()
+            ->masteredCampaigns()
             ->where('campaigns.id', $encounter->campaign_id)
             ->exists();
 
